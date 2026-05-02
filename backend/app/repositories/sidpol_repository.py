@@ -1,0 +1,55 @@
+import requests
+import os
+import pandas as pd
+from sqlalchemy.orm import Session
+from app.interfaces.crime_interface import ICrimeRepository
+from app.core.constants import CRIME_WEIGHTS_MAP
+from app.models.crime import DistrictCrimeRate
+
+class SIDPOLRepository(ICrimeRepository):
+    def __init__(self, db_session: Session):
+        self.db = db_session
+        self.source_url = os.getenv("SIDPOL_SOURCE_URL", "https://example.com/sidpol_data.xlsx")
+
+    def download_source(self) -> str:
+        base_download_path = os.getenv("DOWNLOAD_PATH", "data/downloads")
+        download_dir = os.path.join(os.getcwd(), base_download_path)
+        
+        os.makedirs(download_dir, exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+        file_path = os.path.join(download_dir, f"sidpol_sync_{timestamp}.xlsx")
+        return file_path
+
+    def parse_source(self, file_path: str):
+        # 1. Leer hojas relevantes (2025 y 2026)
+        df_2025 = pd.read_excel(file_path, sheet_name='Temp6')
+        df_2026 = pd.read_excel(file_path, sheet_name='Temp7')
+        df_combined = pd.concat([df_2025, df_2026], ignore_index=True)
+        
+        # 2. Filtro Geográfico
+        target_regions = ['LIMA', 'CALLAO']
+        df_geo = df_combined[df_combined['PROV_HECHO'].isin(target_regions)].copy()
+        
+        # 3. Filtro por Subtipos Relevantes
+        relevant_subtypes = list(CRIME_WEIGHTS_MAP.keys())
+        df_filtered = df_geo[df_geo['SUB_TIPO'].isin(relevant_subtypes)].copy()
+
+        # 4. Agrupación Anual por Distrito y Ubigeo
+        summary = df_filtered.groupby(['ANIO', 'UBIGEO_HECHO', 'DIST_HECHO', 'SUB_TIPO']).agg(
+            total_anual=('n_dist_ID_DGC', 'sum')
+        ).reset_index()
+        
+        return summary
+
+    def save_rates(self, summary_df):
+        for _, row in summary_df.iterrows():
+            crime_entry = DistrictCrimeRate(
+                district_ubigeo=str(row['UBIGEO_HECHO']),
+                district_name=row['DIST_HECHO'],
+                period=row['period'],
+                crime_type=row['TIPO'],
+                incident_count=row['total']
+            )
+            self.db.add(crime_entry)
+        self.db.commit()
