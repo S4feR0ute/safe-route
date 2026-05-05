@@ -20,14 +20,23 @@ CREATE TABLE IF NOT EXISTS crime_types_weights (
     is_street_crime BOOLEAN DEFAULT TRUE -- Para filtrar lo que no es de calle
 );
 
--- Tabla para Tasas de Criminalidad
-CREATE TABLE IF NOT EXISTS district_crime_rates (
+-- Tabla de Criminalidad
+CREATE TABLE IF NOT EXISTS crimen_raw_data (
     id SERIAL PRIMARY KEY,
     district_ubigeo VARCHAR(10),
     district_name TEXT,
     period VARCHAR(7),
     crime_type TEXT,
     incident_count INTEGER DEFAULT 0
+);
+
+-- Tabla de tasas de criminalidad por distrito
+CREATE TABLE IF NOT EXISTS district_crime_stats (
+    id SERIAL PRIMARY KEY,
+    district_ubigeo VARCHAR(10) UNIQUE,
+    district_name TEXT,
+    total_incidents_count INTEGER,
+    weighted_crime_rate FLOAT,
 );
 
 -- Tabla de Contexto Urbano
