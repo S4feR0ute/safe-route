@@ -4,7 +4,7 @@ import pandas as pd
 from sqlalchemy.orm import Session
 from app.interfaces.crime_interface import ICrimeRepository
 from app.core.constants import CRIME_WEIGHTS_MAP
-from app.models.crime import DistrictCrimeRate
+from app.models.crime_raw import CrimeRawData
 
 class SIDPOLRepository(ICrimeRepository):
     def __init__(self, db_session: Session):
@@ -44,7 +44,7 @@ class SIDPOLRepository(ICrimeRepository):
 
     def save_rates(self, summary_df):
         for _, row in summary_df.iterrows():
-            crime_entry = DistrictCrimeRate(
+            crime_entry = CrimeRawData(
                 district_ubigeo=str(row['UBIGEO_HECHO']),
                 district_name=row['DIST_HECHO'],
                 period=row['period'],
