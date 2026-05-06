@@ -1,0 +1,13 @@
+# Enviroment
+venv/
+env/
+
+# Python
+__pycache__/
+*/__pycache__/
+
+# Environments variables
+.env
+
+# Data
+data/
