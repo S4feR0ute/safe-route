@@ -36,7 +36,8 @@ CREATE TABLE IF NOT EXISTS district_crime_stats (
     district_ubigeo VARCHAR(10) UNIQUE,
     district_name TEXT,
     total_incidents_count INTEGER,
-    weighted_crime_rate FLOAT,
+    violent_incidents_count INTEGER,
+    weighted_crime_rate FLOAT
 );
 
 -- Tabla de Contexto Urbano
