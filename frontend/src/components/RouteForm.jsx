@@ -1,57 +1,52 @@
-import { useState } from 'react';
-import './RouteForm.css'; // Importamos diseño
+import './RouteForm.css';
 
-const RouteForm = () => {
-  // useState crea dos variables en la memoria: 'origen' y 'destino'.
-  // setOrigen y setDestino son las funciones que actualizan esa memoria.
-  const [origen, setOrigen] = useState('');
-  const [destino, setDestino] = useState('');
-
-  // Esta función se ejecuta cuando se presiona el botón "Buscar"
+const RouteForm = ({ origen, destino, onClear }) => {
   const handleSubmit = (evento) => {
-    evento.preventDefault(); // Evita que la página web se recargue
+    evento.preventDefault();
     
-    // Como no hay backend aún, solamente mostramos una alerta para comprobar que funciona
-    alert(`Buscando ruta segura...\nOrigen: ${origen}\nDestino: ${destino}`);
+    if (!origen || !destino) {
+      alert('Por favor selecciona origen y destino en el mapa');
+      return;
+    }
+
+    alert(`Buscando ruta segura...\nOrigen: ${origen[0].toFixed(4)}, ${origen[1].toFixed(4)}\nDestino: ${destino[0].toFixed(4)}, ${destino[1].toFixed(4)}`);
     console.log("Datos enviados:", { origen, destino });
+  };
+
+  const formatCoords = (coords) => {
+    if (!coords) return '-';
+    return `${coords[0].toFixed(4)}, ${coords[1].toFixed(4)}`;
   };
 
   return (
     <div className="formulario-contenedor">
       <h2>SafeRoute Lima</h2>
       
-      
       <form onSubmit={handleSubmit}>
-        
         <div className="campo-grupo">
-          <label htmlFor="origen">Punto de Origen:</label>
-          <input 
-            type="text" 
-            id="origen"
-            placeholder="Ej. UNI Puerta 3" 
-            value={origen}
-            /* onChange detecta cada letra que escribes y actualiza la memoria */
-            onChange={(e) => setOrigen(e.target.value)} 
-            required /* Hace que sea obligatorio llenarlo */
-          />
+          <label>Punto de Origen:</label>
+          <div className="coords-display">
+            {origen ? formatCoords(origen) : 'Haz click en el mapa'}
+          </div>
         </div>
 
         <div className="campo-grupo">
-          <label htmlFor="destino">Punto de Destino:</label>
-          <input 
-            type="text" 
-            id="destino"
-            placeholder="Ej. Estación Central Metropolitano" 
-            value={destino}
-            onChange={(e) => setDestino(e.target.value)}
-            required
-          />
+          <label>Punto de Destino:</label>
+          <div className="coords-display">
+            {destino ? formatCoords(destino) : 'Haz click en el mapa'}
+          </div>
         </div>
 
-        <button type="submit" className="btn-buscar">
-          Buscar Ruta Segura
-        </button>
-
+        <div className="button-group">
+          <button type="submit" className="btn-buscar">
+            Buscar Ruta Segura
+          </button>
+          {(origen || destino) && (
+            <button type="button" className="btn-limpiar" onClick={onClear}>
+              Limpiar
+            </button>
+          )}
+        </div>
       </form>
     </div>
   );
