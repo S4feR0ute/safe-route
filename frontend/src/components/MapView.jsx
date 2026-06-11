@@ -1,5 +1,6 @@
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
-import { useMapEvents } from 'react-leaflet';
+import { useMapEvents, useMap } from 'react-leaflet';
+import { useEffect } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -11,6 +12,19 @@ L.Icon.Default.mergeOptions({
 });
 
 const MapClickHandler = ({ onSelectPoint, origen, destino }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    const handleSelectPoint = (e) => {
+      const { type, coords } = e.detail;
+      onSelectPoint(type, coords);
+      map.setView(coords, 14);
+    };
+
+    window.addEventListener('selectPoint', handleSelectPoint);
+    return () => window.removeEventListener('selectPoint', handleSelectPoint);
+  }, [onSelectPoint, map]);
+
   useMapEvents({
     click(e) {
       const coords = [e.latlng.lat, e.latlng.lng];

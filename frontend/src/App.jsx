@@ -5,6 +5,7 @@ import RouteForm from './components/RouteForm';
 function App() {
   const [origen, setOrigen] = useState(null);
   const [destino, setDestino] = useState(null);
+  const [clearTrigger, setClearTrigger] = useState(0);
 
   const handleSelectPoint = (type, coords) => {
     if (type === 'origen') {
@@ -17,6 +18,7 @@ function App() {
   const clearPoints = () => {
     setOrigen(null);
     setDestino(null);
+    setClearTrigger(prev => prev + 1);
   };
 
   return (
@@ -25,6 +27,7 @@ function App() {
         origen={origen} 
         destino={destino}
         onClear={clearPoints}
+        clearTrigger={clearTrigger}
       />
       <MapView 
         origen={origen}
