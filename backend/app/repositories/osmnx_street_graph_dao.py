@@ -1,109 +1,123 @@
 import osmnx as ox
 import networkx as nx
-from shapely.geometry import LineString
 from sqlalchemy.orm import Session
 from geoalchemy2.shape import to_shape
+
 from app.interfaces.street_graph_interface import IStreetGraphDAO
 from app.models.street_network import StreetNode, StreetSegment
+from app.utils.osm_helpers import (
+    setup_osmnx,
+    normalize_tag_value,
+    parse_oneway,
+    get_osm_way_id,
+    make_point_geometry,
+    make_linestring_geometry,
+)
 
 
 class OSMnxStreetGraphDAO(IStreetGraphDAO):
-    def __init__(self, db_session: Session, network_type: str = 'drive'):
+    """DAO para extraer y guardar el grafo de calles usando OSMnx."""
+
+    def __init__(self, db_session: Session, network_type: str = "walk"):
         self.db = db_session
         self.network_type = network_type
-        ox.settings.use_cache = True
-        ox.settings.log_console = True
+        self._node_ids_in_db = None
+        setup_osmnx()
 
-    def extract_graph(self, city_name: str) -> nx.MultiDiGraph:
-        print(f"Extrayendo grafo de OSM para: {city_name}...")
-        return ox.graph_from_place(city_name, network_type=self.network_type)
+    def _known_node_ids(self) -> set:
+        if self._node_ids_in_db is None:
+            rows = self.db.query(StreetNode.node_id).all()
+            self._node_ids_in_db = {row[0] for row in rows}
+        return self._node_ids_in_db
 
-    def save_graph(self, graph: nx.MultiDiGraph) -> None:
-        print("Preparando nodos (intersecciones)...")
-        nodes_to_insert = []
+    def extract_graph(self, place_name: str) -> nx.MultiDiGraph:
+        print(f"Extrayendo grafo de OSM para: {place_name}...")
+        graph = ox.graph_from_place(place_name, network_type=self.network_type)
+        print(
+            f"  -> {graph.number_of_nodes()} nodos, "
+            f"{graph.number_of_edges()} aristas"
+        )
+        return graph
+
+    def save_graph(self, graph: nx.MultiDiGraph, place_name: str) -> int:
+        known_nodes = self._known_node_ids()
+        new_nodes = []
+
         for node_id, data in graph.nodes(data=True):
-            lon, lat = data['x'], data['y']
-            # Formato WKT explícito para GeoAlchemy2
-            geom_wkt = f"SRID=4326;POINT({lon} {lat})"
-            
-            node = StreetNode(
-                node_id=node_id, 
-                geometry=geom_wkt, 
-                lat=lat, 
-                lon=lon
-            )
-            nodes_to_insert.append(node)
-        
-        # Inserción de nodos
-        self.db.add_all(nodes_to_insert)
-        self.db.flush()
-        
-        print("Preparando segmentos de calle...")
-        segments_to_insert = []
-        for u, v, k, data in graph.edges(keys=True, data=True):
-            osm_id = data.get('osmid')[0] if isinstance(data.get('osmid'), list) else data.get('osmid')
-            name = data.get('name', 'Desconocido')
-            name = name[0] if isinstance(name, list) else name
-            length = data.get('length', 0.0)
-            highway = data.get('highway', 'unclassified')
-            highway = highway[0] if isinstance(highway, list) else highway
-            oneway = bool(data.get('oneway', False))
+            if node_id in known_nodes:
+                continue
 
-            if 'geometry' in data:
-                line_wkt = data['geometry'].wkt
-            else:
-                x1, y1 = graph.nodes[u]['x'], graph.nodes[u]['y']
-                x2, y2 = graph.nodes[v]['x'], graph.nodes[v]['y']
-                line_wkt = LineString([(x1, y1), (x2, y2)]).wkt
-                
-            geom_wkt = f"SRID=4326;{line_wkt}"
+            lon, lat = data["x"], data["y"]
+            new_nodes.append(
+                StreetNode(
+                    node_id=node_id,
+                    geometry=make_point_geometry(lon, lat),
+                    lat=lat,
+                    lon=lon,
+                )
+            )
+            known_nodes.add(node_id)
+
+        if new_nodes:
+            self.db.add_all(new_nodes)
+            self.db.flush()
+            print(f"  -> {len(new_nodes)} nodos nuevos guardados")
+
+        segments = []
+        for u, v, _key, data in graph.edges(keys=True, data=True):
+            if u not in known_nodes or v not in known_nodes:
+                continue
 
             segment = StreetSegment(
-                osm_way_id=osm_id,
-                geometry=geom_wkt,
-                name=name,
-                length_m=length,
-                highway_type=highway,
-                oneway=oneway,
+                osm_way_id=get_osm_way_id(data),
+                geometry=make_linestring_geometry(graph, u, v, data),
+                name=normalize_tag_value(data.get("name")),
+                length_m=float(data.get("length", 0.0) or 0.0),
+                highway_type=normalize_tag_value(
+                    data.get("highway"), default="unclassified"
+                ),
+                oneway=parse_oneway(data.get("oneway", False)),
                 source_node_id=u,
-                target_node_id=v
+                target_node_id=v,
             )
-            segments_to_insert.append(segment)
+            segments.append(segment)
 
-        # Inserción de aristas
-        self.db.add_all(segments_to_insert)
-        self.db.commit()
-        print(f"Grafo guardado exitosamente. {len(nodes_to_insert)} nodos y {len(segments_to_insert)} calles insertadas.")
+        if segments:
+            self.db.add_all(segments)
+
+        if new_nodes or segments:
+            self.db.commit()
+            print(f"  -> {len(segments)} segmentos guardados para {place_name}")
+        else:
+            print(f"  -> Sin datos nuevos para {place_name}")
+
+        self._node_ids_in_db = known_nodes
+        return len(segments)
 
     def load_graph(self) -> nx.MultiDiGraph:
         print("Reconstruyendo el grafo NetworkX desde la base de datos...")
-        
-        G = nx.MultiDiGraph()
-        G.graph['crs'] = "epsg:4326"
 
-        # Cargar nodos
-        nodos_db = self.db.query(StreetNode).all()
-        for nodo in nodos_db:
-            G.add_node(
-                nodo.node_id, 
-                x=nodo.lon, 
-                y=nodo.lat
+        graph = nx.MultiDiGraph()
+        graph.graph["crs"] = "epsg:4326"
+
+        for node in self.db.query(StreetNode).all():
+            graph.add_node(node.node_id, x=node.lon, y=node.lat)
+
+        for segment in self.db.query(StreetSegment).all():
+            geometry = to_shape(segment.geometry) if segment.geometry else None
+            graph.add_edge(
+                segment.source_node_id,
+                segment.target_node_id,
+                osmid=segment.osm_way_id,
+                name=segment.name,
+                length=segment.length_m,
+                highway=segment.highway_type,
+                oneway=segment.oneway,
+                geometry=geometry,
             )
 
-        # Cargar segmentos
-        segmentos_db = self.db.query(StreetSegment).all()
-        for seg in segmentos_db:
-            geom_shapely = to_shape(seg.geometry) if seg.geometry is not None else None
-            G.add_edge(
-                seg.source_node_id,
-                seg.target_node_id,
-                osmid=seg.osm_way_id,
-                name=seg.name,
-                length=seg.length_m,
-                highway=seg.highway_type,
-                oneway=seg.oneway,
-                geometry=geom_shapely
-            )
-
-        print(f"Grafo reconstruido exitosamente con {G.number_of_nodes()} nodos y {G.number_of_edges()} calles.")
-        return G
+        print(
+            f"Grafo reconstruido: {graph.number_of_nodes()} nodos, "
+            f"{graph.number_of_edges()} calles."
+        )
+        return graph
