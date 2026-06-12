@@ -7,7 +7,7 @@ from app.interfaces.crime_interface import ICrimeRepository
 from app.core.constants import CRIME_WEIGHTS_MAP
 from app.models.crime_raw import CrimeRawData
 
-class SIDPOLRepository(ICrimeRepository):
+class SIDPOLCrimeRepository(ICrimeRepository):
     def __init__(self, db_session: Session):
         self.db = db_session
         self.source_url = os.getenv("SIDPOL_SOURCE_URL")
