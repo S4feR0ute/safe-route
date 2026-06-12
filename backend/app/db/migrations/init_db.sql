@@ -1,14 +1,24 @@
 CREATE EXTENSION IF NOT EXISTS postgis;
 
--- Tabla para el Grafo de Calles
+-- Tabla para los Nodos del Grafo (Intersecciones/Cruces)
+CREATE TABLE IF NOT EXISTS street_nodes (
+    node_id BIGINT PRIMARY KEY,
+    geometry GEOMETRY(Point, 4326),
+    lat FLOAT,
+    lon FLOAT
+);
+
+-- Tabla para las Aristas (Segmentos de Calle)
 CREATE TABLE IF NOT EXISTS street_segments (
     id SERIAL PRIMARY KEY,
     osm_way_id BIGINT,
     geometry GEOMETRY(LineString, 4326),
     name TEXT,
     length_m FLOAT,
-    source_node_id BIGINT,
-    target_node_id BIGINT,
+    highway_type TEXT,             -- Residencial, primaria, autopista, etc.
+    oneway BOOLEAN DEFAULT FALSE,  -- Sentido de la calle (crucial para ruteo)
+    source_node_id BIGINT REFERENCES street_nodes(node_id) ON DELETE CASCADE,
+    target_node_id BIGINT REFERENCES street_nodes(node_id) ON DELETE CASCADE,
     district_ubigeo VARCHAR(10)
 );
 
