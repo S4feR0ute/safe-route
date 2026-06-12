@@ -50,15 +50,25 @@ CREATE TABLE IF NOT EXISTS district_crime_stats (
     weighted_crime_rate FLOAT
 );
 
+-- Tabla para la Infraestructura Urbana (POIs)
+CREATE TABLE IF NOT EXISTS urban_pois (
+    id SERIAL PRIMARY KEY,
+    osm_id VARCHAR UNIQUE,
+    poi_type VARCHAR,
+    name VARCHAR,
+    geometry GEOMETRY(Point, 4326)
+);
+
 -- Tabla de Contexto Urbano
 CREATE TABLE IF NOT EXISTS urban_context (
     id SERIAL PRIMARY KEY,
-    segment_id INTEGER REFERENCES street_segments(id),
+    segment_id INTEGER REFERENCES street_segments(id) ON DELETE CASCADE,
     nearby_police_stations INTEGER DEFAULT 0,
     nearby_cameras INTEGER DEFAULT 0,
     lighting_level TEXT,
     road_type TEXT,
-    poi_density FLOAT
+    poi_density FLOAT,
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Tabla de Scores Compuestos
