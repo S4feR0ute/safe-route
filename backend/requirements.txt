@@ -2,3 +2,12 @@ pandas
 openpyxl
 requests
 sqlalchemy
+osmnx
+networkx
+geopandas
+shapely
+psycopg2-binary
+python-dotenv
+fastapi
+uvicorn
+geoalchemy2
