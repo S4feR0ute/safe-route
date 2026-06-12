@@ -8,6 +8,6 @@ class IUrbanContextDAO(ABC):
         pass
 
     @abstractmethod
-    def save_pois_to_db(self, gdf: gpd.GeoDataFrame, poi_type: str) -> None:
+    def save_pois(self, gdf: gpd.GeoDataFrame, poi_type: str) -> None:
         """Persists the extracted POIs into the database."""
         pass
