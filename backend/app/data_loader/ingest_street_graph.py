@@ -1,11 +1,3 @@
-"""
-Script de ingesta del grafo de calles (RF-08).
-
-Uso:
-    cd backend
-    python -m app.data_loader.ingest_street_graph
-"""
-
 import sys
 import time
 from pathlib import Path
