@@ -90,3 +90,13 @@ CREATE TABLE IF NOT EXISTS data_load_log (
     records_processed INTEGER,
     status TEXT
 );
+
+CREATE TABLE IF NOT EXISTS districts (
+    ubigeo VARCHAR(10) PRIMARY KEY,
+    district_name VARCHAR(100) NOT NULL,
+    geometry GEOMETRY(POLYGON, 4326) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_districts_geometry
+ON districts
+USING GIST (geometry);

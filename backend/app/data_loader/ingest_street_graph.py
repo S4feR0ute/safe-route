@@ -9,6 +9,7 @@ Uso:
 import sys
 import time
 from pathlib import Path
+from sqlalchemy import text 
 
 # Permite ejecutar el script directamente sin instalar el paquete
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
@@ -32,12 +33,11 @@ def run_street_network_ingestion(districts=None, network_type="walk"):
     try:
         dao = OSMnxStreetGraphDAO(db_session=db, network_type=network_type)
 
-        print("Limpiando tablas de red vial...")
-        db.query(StreetSegment).delete()
-        db.query(StreetNode).delete()
+        print("Limpiando tablas de red vial (vía TRUNCATE)...")
+        db.execute(text("TRUNCATE TABLE street_segments, street_nodes RESTART IDENTITY CASCADE;"))
         db.commit()
 
-        print("--- Ingesta de red vial (OSMnx) ---")
+        print(" Ingesta de red vial (OSMnx) ")
         print(f"Distritos a procesar: {len(districts)} | network_type={network_type}")
 
         for index, district in enumerate(districts, 1):
@@ -53,13 +53,19 @@ def run_street_network_ingestion(districts=None, network_type="walk"):
                 failed.append((district, str(error)))
                 print(f"  ERROR: {error}")
 
-        print("\n--- Resumen ---")
+        print("\n Resumen ")
         print(f"Distritos OK: {ok_count}/{len(districts)}")
         print(f"Segmentos insertados: {total_segments}")
         if failed:
             print("Distritos con error:")
             for name, msg in failed:
                 print(f"  - {name}: {msg}")
+        
+        # Asignar segmentos a distritos vía ST_Within
+        print("\n Asignación de segmentos a distritos ")
+        stats = dao.assign_segments_to_districts_st_within()
+        
+        print("\n Ingesta completada exitosamente")
 
     except Exception as error:
         db.rollback()

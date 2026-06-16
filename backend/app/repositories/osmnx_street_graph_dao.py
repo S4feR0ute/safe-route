@@ -1,10 +1,12 @@
 import osmnx as ox
 import networkx as nx
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from geoalchemy2.shape import to_shape
 
 from app.interfaces.street_graph_interface import IStreetGraphDAO
 from app.models.street_network import StreetNode, StreetSegment
+from app.models.district_geometry import DistrictGeometry
 from app.utils.osm_helpers import (
     setup_osmnx,
     normalize_tag_value,
@@ -121,3 +123,133 @@ class OSMnxStreetGraphDAO(IStreetGraphDAO):
             f"{graph.number_of_edges()} calles."
         )
         return graph
+
+    def assign_segments_to_districts_st_within(self) -> dict:
+        """
+        Asigna cada segmento de calle a su distrito usando ST_Within (PostGIS).
+        
+        Algoritmo:
+        1. ST_Within: Segmentos completamente dentro del polígono del distrito
+        2. ST_Intersects: Para segmentos en límites, si no fueron asignados
+        
+        Returns:
+            dict: Estadísticas de la asignación
+                {
+                    "total_segments": int,
+                    "assigned_via_st_within": int,
+                    "assigned_via_st_intersects": int,
+                    "total_assigned": int,
+                    "unassigned": int,
+                    "by_district": dict  # Segmentos por UBIGEO
+                }
+        """
+        print("\nAsignación de segmentos a distritos vía ST_Within")
+        
+        # Verificar si hay distritos en BD
+        district_count = self.db.query(DistrictGeometry).count()
+        if district_count == 0:
+            print("   ADVERTENCIA: No hay distritos en la BD.")
+            print("   Ejecuta populate_districts_osm.py primero.")
+            return {
+                "error": "No districts found in database",
+                "total_segments": 0,
+                "assigned_via_st_within": 0,
+                "assigned_via_st_intersects": 0,
+                "total_assigned": 0,
+                "unassigned": 0,
+            }
+        
+        print(f"  Distritos en BD: {district_count}")
+        
+        # Asignar segmentos usando ST_Within (está completamente dentro)
+        print("  [1/2] Asignando segmentos dentro de polígonos (ST_Within)...")
+        
+        query_st_within = text("""
+            UPDATE street_segments ss
+            SET district_ubigeo = d.ubigeo
+            FROM districts d
+            WHERE ss.district_ubigeo IS NULL
+              AND ST_Within(ss.geometry, d.geometry)
+        """)
+        
+        result_within = self.db.execute(query_st_within)
+        self.db.commit()
+        assigned_within = result_within.rowcount
+        print(f"    -> {assigned_within} segmentos asignados via ST_Within")
+        
+        # Asignar segmentos en límites usando ST_Intersects
+        print("  [2/2] Asignando segmentos en límites (ST_Intersects)...")
+        
+        query_st_intersects = text("""
+            UPDATE street_segments ss
+            SET district_ubigeo = (
+                SELECT d.ubigeo 
+                FROM districts d 
+                WHERE ST_Intersects(ss.geometry, d.geometry)
+                ORDER BY ST_Distance(ss.geometry, d.geometry) ASC
+                LIMIT 1
+            )
+            WHERE ss.district_ubigeo IS NULL
+              AND EXISTS (
+                SELECT 1 FROM districts d 
+                WHERE ST_Intersects(ss.geometry, d.geometry)
+              )
+        """)
+        
+        result_intersects = self.db.execute(query_st_intersects)
+        self.db.commit()
+        assigned_intersects = result_intersects.rowcount
+        print(f"    -> {assigned_intersects} segmentos asignados via ST_Intersects")
+        
+        # Obtener estadísticas finales
+        total_segments = self.db.query(StreetSegment).count()
+        assigned_total = self.db.query(StreetSegment).filter(
+            StreetSegment.district_ubigeo.isnot(None)
+        ).count()
+        unassigned = total_segments - assigned_total
+        
+        # Estadísticas por distrito
+        by_district_query = text("""
+            SELECT 
+                district_ubigeo,
+                COUNT(*) as count
+            FROM street_segments
+            WHERE district_ubigeo IS NOT NULL
+            GROUP BY district_ubigeo
+            ORDER BY count DESC
+        """)
+        
+        by_district = {}
+        for ubigeo, count in self.db.execute(by_district_query).fetchall():
+            by_district[ubigeo] = count
+        
+        # Imprimir resumen
+        print(f"\n   Resumen:")
+        print(f"    Total de segmentos: {total_segments}")
+        print(f"    Asignados (ST_Within): {assigned_within}")
+        print(f"    Asignados (ST_Intersects): {assigned_intersects}")
+        print(f"    Total asignados: {assigned_total}")
+        print(f"    Sin asignar: {unassigned}")
+        
+        if by_district:
+            print(f"\n   Segmentos por distrito (top 10):")
+            for i, (ubigeo, count) in enumerate(list(by_district.items())[:10], 1):
+                district_obj = self.db.query(DistrictGeometry).filter(
+                    DistrictGeometry.ubigeo == ubigeo
+                ).first()
+                district_name = district_obj.district_name if district_obj else "Unknown"
+                print(f"    {i:2}. {ubigeo} ({district_name}): {count:6} segmentos")
+        
+        if unassigned > 0:
+            print(f"\n    {unassigned} segmentos sin asignar. Verifica geometrías.")
+        else:
+            print(f"\n   ÉXITO: Todos los segmentos fueron asignados a distritos")
+        
+        return {
+            "total_segments": total_segments,
+            "assigned_via_st_within": assigned_within,
+            "assigned_via_st_intersects": assigned_intersects,
+            "total_assigned": assigned_total,
+            "unassigned": unassigned,
+            "by_district": by_district,
+        }
