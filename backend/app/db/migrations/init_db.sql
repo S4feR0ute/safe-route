@@ -90,3 +90,22 @@ CREATE TABLE IF NOT EXISTS data_load_log (
     records_processed INTEGER,
     status TEXT
 );
+
+-- Tabla de polígonos de distritos
+CREATE TABLE IF NOT EXISTS districts (
+    id SERIAL PRIMARY KEY,
+    ubigeo VARCHAR(10) UNIQUE,
+    name TEXT,
+    geometry GEOMETRY(Polygon, 4326)
+);
+
+-- Índice espacial para acelerar las consultas ST_Within
+CREATE INDEX IF NOT EXISTS idx_districts_geometry 
+    ON districts USING GIST (geometry);
+
+CREATE INDEX IF NOT EXISTS idx_segments_district_ubigeo
+    ON street_segments (district_ubigeo)
+    WHERE district_ubigeo IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_street_segments_geometry
+    ON street_segments USING GIST (geometry);
