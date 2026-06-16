@@ -15,14 +15,6 @@ from app.services.segment_district_service import SegmentDistrictService
 
 
 def run_district_assignment(districts=None):
-    """
-    Script principal de asignación de distritos a segmentos.
-
-    Pasos:
-    1. Descarga y guarda los polígonos de los distritos (tabla districts).
-    2. Ejecuta ST_Within para asignar district_ubigeo a cada segmento de calle.
-    3. Imprime un resumen de la asignación.
-    """
     districts = districts or TARGET_DISTRICTS
     db = SessionLocal()
 
