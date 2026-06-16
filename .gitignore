@@ -5,9 +5,13 @@ env/
 # Python
 __pycache__/
 */__pycache__/
+__init__.py
+*/__init__.py
 
 # Environments variables
 .env
 
-# Data
+# Data and cache
 data/
+cache/
+*/cache/
