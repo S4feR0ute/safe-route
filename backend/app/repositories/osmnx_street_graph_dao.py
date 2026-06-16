@@ -2,7 +2,6 @@ import osmnx as ox
 import networkx as nx
 from sqlalchemy.orm import Session
 from geoalchemy2.shape import to_shape
-
 from app.interfaces.street_graph_interface import IStreetGraphDAO
 from app.models.street_network import StreetNode, StreetSegment
 from app.utils.osm_helpers import (
@@ -33,10 +32,7 @@ class OSMnxStreetGraphDAO(IStreetGraphDAO):
     def extract_graph(self, place_name: str) -> nx.MultiDiGraph:
         print(f"Extrayendo grafo de OSM para: {place_name}...")
         graph = ox.graph_from_place(place_name, network_type=self.network_type)
-        print(
-            f"  -> {graph.number_of_nodes()} nodos, "
-            f"{graph.number_of_edges()} aristas"
-        )
+        print(f"  -> {graph.number_of_nodes()} nodos, {graph.number_of_edges()} aristas")
         return graph
 
     def save_graph(self, graph: nx.MultiDiGraph, place_name: str) -> int:
@@ -116,8 +112,5 @@ class OSMnxStreetGraphDAO(IStreetGraphDAO):
                 geometry=geometry,
             )
 
-        print(
-            f"Grafo reconstruido: {graph.number_of_nodes()} nodos, "
-            f"{graph.number_of_edges()} calles."
-        )
+        print(f"Grafo reconstruido: {graph.number_of_nodes()} nodos, {graph.number_of_edges()} calles.")
         return graph

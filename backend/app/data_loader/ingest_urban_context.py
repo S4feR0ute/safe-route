@@ -1,11 +1,3 @@
-"""
-Script de ingesta de contexto urbano desde OSM (RF-08).
-
-Uso:
-    cd backend
-    python -m app.data_loader.ingest_urban_context
-"""
-
 import sys
 import time
 from pathlib import Path
