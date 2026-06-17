@@ -7,6 +7,8 @@ if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 from app.db.session import SessionLocal
+from app.models.street_network import StreetSegment, StreetNode  # necesario para que SQLAlchemy registre la tabla antes del commit
+from app.models.risk_score import RiskScore
 from app.services.score_calculator_service import ScoreCalculatorService
 
 
