@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import './RouteForm.css';
 
-const RouteForm = ({ origen, destino, onClear, clearTrigger }) => {
+const RouteForm = ({ origen, destino, onClear, clearTrigger, onSearch, loading, error }) => {
   const [origenText, setOrigenText] = useState('');
   const [destinoText, setDestinoText] = useState('');
   const [sugOrigenActive, setSugOrigenActive] = useState(false);
@@ -87,8 +87,7 @@ const RouteForm = ({ origen, destino, onClear, clearTrigger }) => {
       return;
     }
 
-    alert(`Buscando ruta segura...\nOrigen: ${origen[0].toFixed(4)}, ${origen[1].toFixed(4)}\nDestino: ${destino[0].toFixed(4)}, ${destino[1].toFixed(4)}`);
-    console.log("Datos enviados:", { origen, destino });
+    onSearch();
   };
 
   const formatCoords = (coords) => {
@@ -158,8 +157,8 @@ const RouteForm = ({ origen, destino, onClear, clearTrigger }) => {
         </div>
 
         <div className="button-group">
-          <button type="submit" className="btn-buscar">
-            Buscar Ruta Segura
+          <button type="submit" className="btn-buscar" disabled={loading}>
+            {loading ? 'Buscando...' : 'Buscar Ruta Segura'}
           </button>
           {(origen || destino) && (
             <button type="button" className="btn-limpiar" onClick={onClear}>
@@ -167,6 +166,8 @@ const RouteForm = ({ origen, destino, onClear, clearTrigger }) => {
             </button>
           )}
         </div>
+
+        {error && <p className="error-msg">{error}</p>}
       </form>
     </div>
   );
