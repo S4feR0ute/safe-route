@@ -130,3 +130,56 @@ UBIGEO_MAP = {
     "Mi Perú, Callao, Peru":                    "070107",
     "Ventanilla, Callao, Peru":                 "070106",
 }
+
+# --- Pesos del score compuesto (SAF-43) ---
+# w_d + w_c + w_r = 1.0
+# Mientras RF-18 no esté implementado, w_r = 0.0
+WEIGHT_DISTRICT = 0.70    # Capa 1: criminalidad distrital (SIDPOL)
+WEIGHT_CONTEXT  = 0.30    # Capa 2: contexto urbano (OSM)
+WEIGHT_REPORT   = 0.00    # Capa 3: reportes verificados (RF-18, Sprint 6)
+
+# Factor de aversión al riesgo para el Dijkstra (SAF-43)
+# cost(e) = length_m * (1 + ALPHA * composite_score)
+ALPHA_RISK = 2.0
+
+# Valor neutro cuando no hay datos de distrito o contexto
+SCORE_NEUTRO = 0.5
+
+# --- Pesos de cada factor dentro del context_score (SAF-16) ---
+CONTEXT_WEIGHT_LIGHTING  = 0.30   # Factor 1: iluminación
+CONTEXT_WEIGHT_POLICE    = 0.20   # Factor 2: presencia policial
+CONTEXT_WEIGHT_ROAD_TYPE = 0.20   # Factor 3: tipo de vía
+CONTEXT_WEIGHT_CAMERAS   = 0.15   # Factor 4: vigilancia (cámaras + bancos)
+CONTEXT_WEIGHT_COMMERCE  = 0.15   # Factor 5: actividad comercial
+
+# Riesgo por tipo de vía (SAF-16, factor 3 del context_score)
+HIGHWAY_RISK = {
+    "primary":        0.20,
+    "primary_link":   0.20,
+    "secondary":      0.25,
+    "secondary_link": 0.25,
+    "pedestrian":     0.30,
+    "tertiary":       0.35,
+    "tertiary_link":  0.35,
+    "living_street":  0.40,
+    "residential":    0.45,
+    "unclassified":   0.55,
+    "service":        0.60,
+    "footway":        0.70,
+    "steps":          0.70,
+    "path":           0.85,
+    "track":          0.90,
+}
+HIGHWAY_RISK_DEFAULT = 0.50   # Valor por defecto si el tipo no está en el mapa
+
+# --- Umbrales de categorías (SAF-44) ---
+# security_score va de 0 a 100 (mayor = más seguro)
+CATEGORIA_SEGURA    = 70   # >= 70 -> Segura
+CATEGORIA_MODERADA  = 40   # >= 40 -> Moderada, < 40 -> Riesgosa
+
+# Umbrales de composite_score por segmento (0-1)
+RIESGO_BAJO  = 0.30   # <= 0.30 -> verde
+RIESGO_MEDIO = 0.60   # <= 0.60 -> amarillo, > 0.60 -> rojo
+
+# Regla de degradación: si más del 10% de la longitud es rojo, baja a Moderada
+DEGRADACION_ROJO_MAX = 0.10

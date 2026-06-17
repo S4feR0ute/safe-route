@@ -8,4 +8,5 @@ class DistrictCrimeStats(Base):
     district_ubigeo = Column(String(10), unique=True, index=True)
     district_name = Column(String)
     total_incidents_count = Column(Integer)
+    violent_incidents_count = Column(Integer)
     weighted_crime_rate = Column(Float)
