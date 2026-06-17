@@ -198,3 +198,9 @@ STREET_CRIMES = {
     "DAÑOS",
     "EXPOSICION A PELIGRO O ABANDONO DE PERSONAS EN PELIGRO",
 }
+
+# Velocidad peatonal para calcular tiempo (SAF-45: 5 km/h ≈ 83 m/min)
+VELOCIDAD_PEATONAL_MPM = 83.0
+
+# Distancia máxima permitida entre origen y destino (15 km en línea recta)
+DISTANCIA_MAXIMA_M = 15_000
