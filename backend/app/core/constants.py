@@ -204,3 +204,18 @@ VELOCIDAD_PEATONAL_MPM = 83.0
 
 # Distancia máxima permitida entre origen y destino (15 km en línea recta)
 DISTANCIA_MAXIMA_M = 15_000
+
+# Bounding box completo de Lima Metropolitana + Callao (SAF-45)
+# Formato Nominatim: oeste,norte,este,sur
+LIMA_VIEWBOX = "-77.20,-11.57,-76.62,-12.52"
+
+# URL base de Nominatim
+NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+
+# Nominatim requiere identificar quién hace las peticiones (política de uso)
+HEADERS = {
+    "User-Agent": "SafeRoute/1.0 (proyecto universitario; contacto: saferoute@example.com)",
+}
+
+# Máximo de resultados a pedir a Nominatim
+MAX_RESULTS = 5
