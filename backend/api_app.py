@@ -2,8 +2,8 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
-
-from app.api.route_endpoint import router
+from app.api.route_endpoint import router as route_router
+from app.api.geocode_endpoint import router as geocode_router
 
 app = FastAPI(
     title="SafeRoute API",
@@ -33,5 +33,6 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         }},
     )
 
-# --- Registrar el router con los endpoints ---
-app.include_router(router)
+# --- Registrar routers ---
+app.include_router(route_router)
+app.include_router(geocode_router)
