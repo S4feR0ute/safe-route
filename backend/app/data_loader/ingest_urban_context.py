@@ -29,10 +29,10 @@ def run_context_ingestion(districts=None):
             print(f"\n[{index}/{len(districts)}] {district}")
             try:
                 police_gdf = dao.extract_pois(district, POLICE_TAGS)
-                dao.save_pois_to_db(police_gdf, poi_type="police_station")
+                dao.save_pois(police_gdf, poi_type="police_station")
 
                 camera_gdf = dao.extract_pois(district, CAMERA_TAGS)
-                dao.save_pois_to_db(camera_gdf, poi_type="surveillance_camera")
+                dao.save_pois(camera_gdf, poi_type="surveillance_camera")
 
                 ok_count += 1
                 time.sleep(1)

@@ -74,9 +74,10 @@ CREATE TABLE IF NOT EXISTS urban_context (
 -- Tabla de Scores Compuestos
 CREATE TABLE IF NOT EXISTS risk_scores (
     id SERIAL PRIMARY KEY,
-    segment_id INTEGER REFERENCES street_segments(id),
+    segment_id INTEGER REFERENCES street_segments(id) ON DELETE CASCADE,
     district_score FLOAT,
     context_score FLOAT,
+    report_score FLOAT DEFAULT 0.0,   -- Capa 3: se activa en RF-18 (Sprint 6)
     composite_score FLOAT,
     last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
