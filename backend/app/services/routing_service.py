@@ -2,6 +2,7 @@ import networkx as nx
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
+from app.interfaces.street_graph_interface import IStreetGraphDAO
 from app.repositories.osmnx_street_graph_dao import OSMnxStreetGraphDAO
 from app.core.constants import (
     ALPHA_RISK,
@@ -16,8 +17,11 @@ class RoutingService:
     Servicio de ruteo usando algoritmo de Dijkstra ponderado.
     """
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, graph_dao: IStreetGraphDAO = None):
         self.db = db
+        # DIP: dependemos de la abstracción IStreetGraphDAO. Por defecto se usa
+        # la implementación OSMnx; es inyectable para tests con grafos sintéticos.
+        self._graph_dao = graph_dao
 
     def calcular_rutas(self, origen_lat: float, origen_lon: float, destino_lat: float, destino_lon: float) -> dict:
         print("Cargando grafo desde la BD...")
@@ -72,7 +76,7 @@ class RoutingService:
         }
 
     def _cargar_grafo_con_scores(self) -> nx.MultiDiGraph:
-        dao = OSMnxStreetGraphDAO(db_session=self.db)
+        dao = self._graph_dao or OSMnxStreetGraphDAO(db_session=self.db)
         graph = dao.load_graph()
 
         scores = self._cargar_scores_por_arista()
