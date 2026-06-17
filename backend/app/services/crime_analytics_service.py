@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from app.models.crime_raw import CrimeRawData
 from app.models.crime_stats import DistrictCrimeStats
+from app.models.crime_type_weight import CrimeTypeWeight
 from app.core.constants import CRIME_WEIGHTS_MAP
 import pandas as pd
 import numpy as np
@@ -9,12 +10,31 @@ class CrimeAnalyticsService:
     def __init__(self, db: Session):
         self.db = db
 
+    def _cargar_pesos(self) -> dict:
+        """
+        Carga los pesos desde la tabla crime_types_weights.
+        Si la tabla está vacía (seed no ejecutado), usa CRIME_WEIGHTS_MAP como fallback.
+        """
+        rows = self.db.query(CrimeTypeWeight).all()
+
+        if not rows:
+            print("  Advertencia: crime_types_weights vacía, usando pesos del constants.py")
+            return CRIME_WEIGHTS_MAP
+
+        pesos = {row.subtype_name: row.danger_weight for row in rows}
+        print(f"  Pesos cargados desde la BD: {len(pesos)} tipos de delito")
+        return pesos
+
     def process_crime_metrics(self):
         """
         Algoritmo de consolidación y normalización de tasas de criminalidad.
         Transforma datos históricos en índices de seguridad para el ruteo.
+        Ahora lee los pesos desde crime_types_weights (RF-12).
         """
-        # 1. Extracción de datos crudos
+        # 1. Cargar pesos desde la BD (con fallback a constants.py)
+        weights_map = self._cargar_pesos()
+
+        # 2. Extracción de datos crudos
         query = self.db.query(CrimeRawData)
         df_raw = pd.read_sql(query.statement, self.db.bind)
 
@@ -22,20 +42,20 @@ class CrimeAnalyticsService:
             print("Advertencia: No se encontraron datos en crime_raw_data para procesar.")
             return
 
-        df_raw['is_violent'] = df_raw['crime_type'].isin(CRIME_WEIGHTS_MAP.keys())
+        df_raw['is_violent'] = df_raw['crime_type'].isin(weights_map.keys())
 
-        # 2. Aplicar Ponderación por Peligrosidad 
-        df_raw['weight'] = df_raw['crime_type'].map(CRIME_WEIGHTS_MAP).fillna(0.05)
+        # 3. Aplicar ponderación diferenciada por tipo de delito (RF-12)
+        df_raw['weight'] = df_raw['crime_type'].map(weights_map).fillna(0.05)
         df_raw['weighted_score'] = df_raw['incident_count'] * df_raw['weight']
 
-        # 3. Agregación Histórica Unificada
+        # 4. Agregación Histórica Unificada
         stats = df_raw.groupby(['district_ubigeo', 'district_name']).agg(
             total_all=('incident_count', 'sum'),
             total_violent=('incident_count', lambda x: x[df_raw.loc[x.index, 'is_violent']].sum()),
             weighted_sum=('weighted_score', 'sum')
         ).reset_index()
 
-        # 4. Normalización Estadística (Escala 0.0 a 1.0)
+        # 5. Normalización Estadística (Escala 0.0 a 1.0)
         stats['safety_index'] = np.sqrt(stats['weighted_sum'])
         
         max_idx = stats['safety_index'].max()

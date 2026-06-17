@@ -183,3 +183,18 @@ RIESGO_MEDIO = 0.60   # <= 0.60 -> amarillo, > 0.60 -> rojo
 
 # Regla de degradación: si más del 10% de la longitud es rojo, baja a Moderada
 DEGRADACION_ROJO_MAX = 0.10
+
+STREET_CRIMES = {
+    "ROBO",
+    "HOMICIDIO",
+    "VIOLACION DE LA LIBERTAD SEXUAL",
+    "VIOLACION DE LA LIBERTAD PERSONAL",
+    "EXTORSION",
+    "TRATA DE PERSONAS",
+    "LESIONES",
+    "HURTO",
+    "PAZ PUBLICA",
+    "PELIGRO COMUN",
+    "DAÑOS",
+    "EXPOSICION A PELIGRO O ABANDONO DE PERSONAS EN PELIGRO",
+}
