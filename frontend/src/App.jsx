@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import MapView from './components/MapView';
 import RouteForm from './components/RouteForm';
+import ResultsPanel from './components/ResultsPanel';
 import { fetchRoute } from './services/routeApi';
 
 function App() {
@@ -59,6 +60,7 @@ function App() {
         onSelectPoint={handleSelectPoint}
         routeData={routeData}
       />
+      <ResultsPanel routeData={routeData} />
     </div>
   );
 }
