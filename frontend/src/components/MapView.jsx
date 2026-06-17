@@ -1,4 +1,4 @@
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import { useMapEvents, useMap } from 'react-leaflet';
 import { useEffect } from 'react';
 import L from 'leaflet';
@@ -40,7 +40,22 @@ const MapClickHandler = ({ onSelectPoint, origen, destino }) => {
   return null;
 };
 
-const MapView = ({ origen, destino, onSelectPoint }) => {
+const FitRoute = ({ routeData }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    const features = routeData?.safe_route?.geojson?.features;
+    if (!features?.length) return;
+    const latlngs = features.flatMap((f) =>
+      f.geometry.coordinates.map(([lon, lat]) => [lat, lon])
+    );
+    map.fitBounds(latlngs, { padding: [60, 60] });
+  }, [routeData, map]);
+
+  return null;
+};
+
+const MapView = ({ origen, destino, onSelectPoint, routeData }) => {
   const limaPosition = [-12.0464, -77.0428];
 
   const origenIcon = new L.Icon({
@@ -85,6 +100,24 @@ const MapView = ({ origen, destino, onSelectPoint }) => {
           <Popup>Destino</Popup>
         </Marker>
       )}
+
+      {routeData?.safe_route?.geojson?.features?.map((feature, idx) => {
+        const positions = feature.geometry.coordinates.map(([lon, lat]) => [lat, lon]);
+        return (
+          <Polyline
+            key={idx}
+            positions={positions}
+            pathOptions={{ color: feature.properties.color, weight: 6, opacity: 0.85 }}
+          >
+            <Popup>
+              {feature.properties.name}<br />
+              Riesgo: {feature.properties.risk_score}
+            </Popup>
+          </Polyline>
+        );
+      })}
+
+      <FitRoute routeData={routeData} />
     </MapContainer>
   );
 };
