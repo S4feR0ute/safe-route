@@ -127,3 +127,18 @@
 .btn-limpiar:hover {
   background-color: #5a6268;
 }
+
+.btn-buscar:disabled {
+  background-color: #9bc4f0;
+  cursor: default;
+}
+
+.error-msg {
+  margin: 12px 0 0;
+  padding: 10px;
+  background-color: #fdecec;
+  border: 1px solid #f5c2c7;
+  border-radius: 4px;
+  color: #b02a37;
+  font-size: 13px;
+}
