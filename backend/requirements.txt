@@ -10,4 +10,4 @@ psycopg2-binary
 python-dotenv
 fastapi
 uvicorn
-geoalchemy2
+geoalchemy2httpx==0.28.1
