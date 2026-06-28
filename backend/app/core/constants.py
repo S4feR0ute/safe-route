@@ -219,3 +219,43 @@ HEADERS = {
 
 # Máximo de resultados a pedir a Nominatim
 MAX_RESULTS = 5
+
+# --- RF-14 a RF-19: Módulo de reportes de ciudadanos ---
+
+# Tipos de incidencia válidos
+INCIDENT_TYPES = {
+    "robo",
+    "asalto",
+    "violencia",
+    "droga",
+    "acoso",
+    "vandalismo",
+    "venta_ambulante",
+    "ocupacion_via",
+    "otro",
+}
+
+# Modos de reporte (RF-13 a RF-16)
+REPORT_MODE_ANONYMOUS = 1       # Sin cuenta, sin documentos
+REPORT_MODE_AUTHENTICATED = 2   # Con cuenta, sin documentos
+REPORT_MODE_DOCUMENTED = 3      # Con cuenta + documentos sustentatorios
+
+# Estados de reporte
+REPORT_STATUS_PENDING = "pending"       # Creado, esperando validación
+REPORT_STATUS_VALIDATED = "validated"   # Aprobado por moderador
+REPORT_STATUS_REJECTED = "rejected"     # Rechazado
+
+# Radio de búsqueda para reportes cercanos (metros)
+REPORT_SEARCH_RADIUS_M = 500
+
+# Límites de file upload (modo 3)
+MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
+ALLOWED_FILE_TYPES = {"pdf", "jpg", "jpeg", "png"}
+
+# JWT
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION_HOURS = 24
+
+# Rate limiting (RF-15: reporte con autenticación)
+REPORTS_PER_USER_PER_DAY = 10  # Máximo reportes/usuario/día
+REPORTS_PER_IP_PER_HOUR = 5    # Máximo reportes/IP/hora (modo 1)
