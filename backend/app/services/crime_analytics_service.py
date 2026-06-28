@@ -11,10 +11,7 @@ class CrimeAnalyticsService:
         self.db = db
 
     def _cargar_pesos(self) -> dict:
-        """
-        Carga los pesos desde la tabla crime_types_weights.
-        Si la tabla está vacía (seed no ejecutado), usa CRIME_WEIGHTS_MAP como fallback.
-        """
+        """Carga los pesos desde la tabla crime_types_weights"""
         rows = self.db.query(CrimeTypeWeight).all()
 
         if not rows:
@@ -29,9 +26,8 @@ class CrimeAnalyticsService:
         """
         Algoritmo de consolidación y normalización de tasas de criminalidad.
         Transforma datos históricos en índices de seguridad para el ruteo.
-        Ahora lee los pesos desde crime_types_weights (RF-12).
         """
-        # 1. Cargar pesos desde la BD (con fallback a constants.py)
+        # 1. Cargar pesos desde la BD
         weights_map = self._cargar_pesos()
 
         # 2. Extracción de datos crudos
@@ -44,7 +40,7 @@ class CrimeAnalyticsService:
 
         df_raw['is_violent'] = df_raw['crime_type'].isin(weights_map.keys())
 
-        # 3. Aplicar ponderación diferenciada por tipo de delito (RF-12)
+        # 3. Aplicar ponderación diferenciada por tipo de delito
         df_raw['weight'] = df_raw['crime_type'].map(weights_map).fillna(0.05)
         df_raw['weighted_score'] = df_raw['incident_count'] * df_raw['weight']
 

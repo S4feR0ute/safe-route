@@ -1,12 +1,12 @@
 import math
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.schemas.route_schemas import RouteRequest, RouteResponse
 from app.services.routing_service import RoutingService
 from app.core.constants import RIESGO_BAJO, RIESGO_MEDIO, VELOCIDAD_PEATONAL_MPM, DISTANCIA_MAXIMA_M
+from app.core.exceptions import error_response
 
 
 router = APIRouter(prefix="/api/v1", tags=["routing"])
@@ -19,13 +19,10 @@ def health_check(db: Session = Depends(get_db)):
         db.execute(__import__("sqlalchemy").text("SELECT 1"))
         return {"status": "ok", "database": "ok"}
     except Exception:
-        return JSONResponse(
-            status_code=503,
-            content={"error": {
-                "code": "SERVICE_UNAVAILABLE",
-                "message": "La base de datos no está disponible.",
-                "details": {}
-            }}
+        return error_response(
+            code="SERVICE_UNAVAILABLE",
+            message="La base de datos no está disponible.",
+            status_code=503
         )
 
 
@@ -36,27 +33,27 @@ def calcular_ruta(request: RouteRequest, db: Session = Depends(get_db)):
     Opcionalmente también devuelve la ruta más corta para comparación.
     """
 
-    # --- Validación extra: origen != destino ---
     dist_lineal = _distancia_metros(
         request.origin.lat, request.origin.lon,
         request.destination.lat, request.destination.lon
     )
 
     if dist_lineal < 50:
-        return JSONResponse(status_code=400, content={"error": {
-            "code": "INVALID_COORDINATES",
-            "message": "El origen y el destino son el mismo punto (menos de 50m de diferencia).",
-            "details": {"distancia_m": round(dist_lineal, 1)}
-        }})
+        return error_response(
+            code="INVALID_COORDINATES",
+            message="El origen y el destino son el mismo punto (menos de 50m de diferencia).",
+            status_code=400,
+            details={"distancia_m": round(dist_lineal, 1)}
+        )
 
     if dist_lineal > DISTANCIA_MAXIMA_M:
-        return JSONResponse(status_code=400, content={"error": {
-            "code": "INVALID_COORDINATES",
-            "message": f"La distancia en línea recta supera el límite de {DISTANCIA_MAXIMA_M/1000:.0f} km.",
-            "details": {"distancia_m": round(dist_lineal, 1)}
-        }})
+        return error_response(
+            code="INVALID_COORDINATES",
+            message=f"La distancia en línea recta supera el límite de {DISTANCIA_MAXIMA_M/1000:.0f} km.",
+            status_code=400,
+            details={"distancia_m": round(dist_lineal, 1)}
+        )
 
-    # --- Calcular rutas ---
     try:
         service = RoutingService(db=db)
         resultado = service.calcular_rutas(
@@ -68,24 +65,23 @@ def calcular_ruta(request: RouteRequest, db: Session = Depends(get_db)):
     except ValueError as e:
         msg = str(e)
         if "vacío" in msg:
-            return JSONResponse(status_code=503, content={"error": {
-                "code": "SERVICE_UNAVAILABLE",
-                "message": "Los datos de rutas aún no han sido calculados. Contacta al administrador.",
-                "details": {}
-            }})
-        return JSONResponse(status_code=404, content={"error": {
-            "code": "NO_ROUTE_FOUND",
-            "message": "No existe una ruta peatonal entre los puntos indicados.",
-            "details": {}
-        }})
+            return error_response(
+                code="SERVICE_UNAVAILABLE",
+                message="Los datos de rutas aún no han sido calculados. Contacta al administrador.",
+                status_code=503
+            )
+        return error_response(
+            code="NO_ROUTE_FOUND",
+            message="No existe una ruta peatonal entre los puntos indicados.",
+            status_code=404
+        )
     except Exception:
-        return JSONResponse(status_code=500, content={"error": {
-            "code": "INTERNAL_ERROR",
-            "message": "Ocurrió un error interno. Por favor intenta de nuevo.",
-            "details": {}
-        }})
+        return error_response(
+            code="INTERNAL_ERROR",
+            message="Ocurrió un error interno. Por favor intenta de nuevo.",
+            status_code=500
+        )
 
-    # --- Armar respuesta ---
     ruta_segura = resultado["ruta_segura"]
     ruta_corta  = resultado["ruta_corta"]
 
@@ -114,10 +110,6 @@ def calcular_ruta(request: RouteRequest, db: Session = Depends(get_db)):
     return response
 
 
-# ------------------------------------------------------------------
-# Helpers
-# ------------------------------------------------------------------
-
 def _build_geojson(segmentos: list) -> dict:
     """
     Convierte la lista de segmentos en un GeoJSON FeatureCollection.
@@ -130,7 +122,7 @@ def _build_geojson(segmentos: list) -> dict:
             "type": "Feature",
             "geometry": {
                 "type": "LineString",
-                "coordinates": seg["coordinates"],  # ya en formato [lon, lat]
+                "coordinates": seg["coordinates"],
             },
             "properties": {
                 "name":       seg["name"],
@@ -162,7 +154,6 @@ def _build_comparison(ruta_segura: dict, ruta_corta: dict) -> dict:
     extra_m = ruta_segura["longitud_total_m"] - ruta_corta["longitud_total_m"]
     extra_min = math.ceil(abs(extra_m) / VELOCIDAD_PEATONAL_MPM)
 
-    # Riesgo promedio = 1 - (security_score / 100)
     riesgo_segura = 1 - (ruta_segura["security_score"] / 100)
     riesgo_corta  = 1 - (ruta_corta["security_score"] / 100)
 

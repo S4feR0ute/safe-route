@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import geopandas as gpd
 
+
 class IUrbanContextDAO(ABC):
     @abstractmethod
     def extract_pois(self, place_name: str, tags: dict) -> gpd.GeoDataFrame:

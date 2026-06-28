@@ -9,6 +9,7 @@ if str(BACKEND_ROOT) not in sys.path:
 
 from app.core.constants import TARGET_DISTRICTS
 from app.db.session import SessionLocal
+from app.db.transactions import transaction_no_close
 from app.models.street_network import StreetNode, StreetSegment
 from app.repositories.osmnx_street_graph_dao import OSMnxStreetGraphDAO
 
@@ -22,41 +23,39 @@ def run_street_network_ingestion(districts=None, network_type="walk"):
     total_segments = 0
 
     try:
-        dao = OSMnxStreetGraphDAO(db_session=db, network_type=network_type)
+        with transaction_no_close(db):
+            dao = OSMnxStreetGraphDAO(db=db, network_type=network_type)
 
-        print("Limpiando tablas de red vial...")
-        db.query(StreetSegment).delete()
-        db.query(StreetNode).delete()
-        db.commit()
+            print("Limpiando tablas de red vial...")
+            db.query(StreetSegment).delete()
+            db.query(StreetNode).delete()
+            db.commit()
 
-        print("--- Ingesta de red vial (OSMnx) ---")
-        print(f"Distritos a procesar: {len(districts)} | network_type={network_type}")
+            print("--- Ingesta de red vial (OSMnx) ---")
+            print(f"Distritos a procesar: {len(districts)} | network_type={network_type}")
 
-        for index, district in enumerate(districts, 1):
-            print(f"\n[{index}/{len(districts)}] {district}")
-            try:
-                graph = dao.extract_graph(district)
-                inserted = dao.save_graph(graph, district)
-                total_segments += inserted
-                ok_count += 1
-                time.sleep(1)
-            except Exception as error:
-                db.rollback()
-                failed.append((district, str(error)))
-                print(f"  ERROR: {error}")
+            for index, district in enumerate(districts, 1):
+                print(f"\n[{index}/{len(districts)}] {district}")
+                try:
+                    graph = dao.extract_graph(district)
+                    inserted = dao.save_graph(graph, district)
+                    total_segments += inserted
+                    ok_count += 1
+                    db.commit()
+                    time.sleep(1)
+                except Exception as error:
+                    db.rollback()
+                    failed.append((district, str(error)))
+                    print(f"  ERROR: {error}")
 
-        print("\n--- Resumen ---")
-        print(f"Distritos OK: {ok_count}/{len(districts)}")
-        print(f"Segmentos insertados: {total_segments}")
-        if failed:
-            print("Distritos con error:")
-            for name, msg in failed:
-                print(f"  - {name}: {msg}")
+            print("\n--- Resumen ---")
+            print(f"Distritos OK: {ok_count}/{len(districts)}")
+            print(f"Segmentos insertados: {total_segments}")
+            if failed:
+                print("Distritos con error:")
+                for name, msg in failed:
+                    print(f"  - {name}: {msg}")
 
-    except Exception as error:
-        db.rollback()
-        print(f"Error crítico en la ingesta: {error}")
-        raise
     finally:
         db.close()
 

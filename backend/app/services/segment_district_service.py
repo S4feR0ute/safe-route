@@ -4,20 +4,14 @@ from sqlalchemy import text
 
 class SegmentDistrictService:
     """
-    Servicio que asigna el district_ubigeo a cada segmento de calle
-    usando la función espacial ST_Within de PostGIS.
+    Servicio que asigna el district_ubigeo a cada segmento de calle usando la función espacial ST_Within de PostGIS.
     """
-
     def __init__(self, db: Session):
         self.db = db
 
     def assign_districts_to_segments(self) -> int:
-        """
-        Retorna la cantidad de segmentos actualizados.
-        """
         print("Asignando distritos a segmentos via ST_Within...")
 
-        # Primero vemos cuántos segmentos no tienen distrito asignado
         count_sin_distrito = self.db.execute(
             text("SELECT COUNT(*) FROM street_segments WHERE district_ubigeo IS NULL")
         ).scalar()
@@ -28,7 +22,6 @@ class SegmentDistrictService:
             print("  -> Todos los segmentos ya tienen distrito asignado.")
             return 0
 
-        # La query de actualización masiva con ST_Within
         update_query = text("""
             UPDATE street_segments AS seg
             SET district_ubigeo = d.ubigeo
@@ -46,7 +39,6 @@ class SegmentDistrictService:
         updated = result.rowcount
         print(f"  -> {updated} segmentos actualizados con su distrito")
 
-        # Cuántos quedaron sin asignar (pueden estar en bordes o fuera de los polígonos)
         sin_asignar = self.db.execute(
             text("SELECT COUNT(*) FROM street_segments WHERE district_ubigeo IS NULL")
         ).scalar()
@@ -58,9 +50,6 @@ class SegmentDistrictService:
         return updated
 
     def get_resumen(self) -> list:
-        """
-        Devuelve un resumen de cuántos segmentos hay por distrito.
-        """
         query = text("""
             SELECT d.name, d.ubigeo, COUNT(seg.id) AS total_segmentos
             FROM districts d
