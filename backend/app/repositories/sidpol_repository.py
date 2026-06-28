@@ -2,6 +2,7 @@ import os
 import pandas as pd
 from datetime import datetime
 from sqlalchemy.orm import Session
+from backend.app.core.config import DATABASE_URL
 from app.interfaces.crime_interface import ICrimeRepository
 from app.models.crime_raw import CrimeRawData
 
@@ -9,7 +10,7 @@ from app.models.crime_raw import CrimeRawData
 class SIDPOLCrimeRepository(ICrimeRepository):
     def __init__(self, db: Session):
         self.db = db
-        self.source_url = os.getenv("SIDPOL_SOURCE_URL")
+        self.source_url = DATABASE_URL
 
     def download_source(self) -> str:
         base_download_path = os.getenv("DOWNLOAD_PATH", "data/downloads")
