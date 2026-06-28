@@ -4,12 +4,16 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from app.api.route_endpoint import router as route_router
 from app.api.geocode_endpoint import router as geocode_router
+from app.middleware.security_middleware import SecurityHeadersMiddleware, InputSanitizationMiddleware
 
 app = FastAPI(
     title="SafeRoute API",
     description="API de ruteo seguro para peatones. Calcula rutas minimizando el riesgo de criminalidad.",
     version="1.0.0",
 )
+
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(InputSanitizationMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
