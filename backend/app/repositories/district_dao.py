@@ -1,3 +1,4 @@
+import logging
 import osmnx as ox
 from sqlalchemy.orm import Session
 from geoalchemy2.elements import WKTElement
@@ -5,22 +6,24 @@ from app.interfaces.district_interface import IDistrictDAO
 from app.models.district import District
 from app.utils.osm_helpers import setup_osmnx
 
+logger = logging.getLogger(__name__)
+
 
 class OSMnxDistrictDAO(IDistrictDAO):
     """DAO para extraer y guardar los polígonos de los distritos usando OSMnx."""
     
-    def __init__(self, db_session: Session):
-        self.db = db_session
+    def __init__(self, db: Session):
+        self.db = db
         setup_osmnx()
 
     def extract_boundary(self, place_name: str, ubigeo: str) -> dict | None:
-        print(f"  Extrayendo polígono de: {place_name}...")
+        logger.info(f"Extrayendo polígono de: {place_name}")
         try:
             # ox.geocode_to_gdf devuelve un GeoDataFrame con el polígono del lugar
             gdf = ox.geocode_to_gdf(place_name)
 
             if gdf.empty:
-                print(f"  -> Sin resultado para {place_name}")
+                logger.warning(f"Sin resultado para {place_name}")
                 return None
 
             # Tomamos la primera geometría
@@ -32,7 +35,7 @@ class OSMnxDistrictDAO(IDistrictDAO):
                 geom = max(geom.geoms, key=lambda p: p.area)
 
             if geom.geom_type != "Polygon":
-                print(f"  -> Geometría inesperada ({geom.geom_type}), saltando")
+                logger.warning(f"Geometría inesperada ({geom.geom_type}) para {place_name}")
                 return None
 
             district_name = place_name.split(",")[0].strip()
@@ -44,7 +47,7 @@ class OSMnxDistrictDAO(IDistrictDAO):
             }
 
         except Exception as error:
-            print(f"  -> Error al extraer {place_name}: {error}")
+            logger.error(f"Error extrayendo {place_name}: {error}")
             return None
 
     def save_boundary(self, boundary_data: dict) -> bool:
@@ -57,7 +60,7 @@ class OSMnxDistrictDAO(IDistrictDAO):
             # Actualizar geometría si ya existe
             existing.geometry = WKTElement(boundary_data["geometry_wkt"], srid=4326)
             existing.name = boundary_data["name"]
-            print(f"  -> Distrito '{boundary_data['name']}' actualizado en BD")
+            logger.info(f"Distrito '{boundary_data['name']}' actualizado")
             return False
         else:
             # Crear nuevo registro
@@ -67,5 +70,5 @@ class OSMnxDistrictDAO(IDistrictDAO):
                 geometry=WKTElement(boundary_data["geometry_wkt"], srid=4326),
             )
             self.db.add(new_district)
-            print(f"  -> Distrito '{boundary_data['name']}' guardado en BD")
+            logger.info(f"Distrito '{boundary_data['name']}' guardado")
             return True

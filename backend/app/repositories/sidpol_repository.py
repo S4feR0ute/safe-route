@@ -1,15 +1,14 @@
-import requests
 import os
 import pandas as pd
 from datetime import datetime
 from sqlalchemy.orm import Session
 from app.interfaces.crime_interface import ICrimeRepository
-from app.core.constants import CRIME_WEIGHTS_MAP
 from app.models.crime_raw import CrimeRawData
 
+
 class SIDPOLCrimeRepository(ICrimeRepository):
-    def __init__(self, db_session: Session):
-        self.db = db_session
+    def __init__(self, db: Session):
+        self.db = db
         self.source_url = os.getenv("SIDPOL_SOURCE_URL")
 
     def download_source(self) -> str:

@@ -17,8 +17,8 @@ from app.utils.osm_helpers import (
 class OSMnxStreetGraphDAO(IStreetGraphDAO):
     """DAO para extraer y guardar el grafo de calles usando OSMnx."""
 
-    def __init__(self, db_session: Session, network_type: str = "walk"):
-        self.db = db_session
+    def __init__(self, db: Session, network_type: str = "walk"):
+        self.db = db
         self.network_type = network_type
         self._node_ids_in_db = None
         setup_osmnx()

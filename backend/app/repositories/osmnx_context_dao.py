@@ -9,8 +9,8 @@ from app.utils.osm_helpers import setup_osmnx, normalize_tag_value, make_point_g
 class OSMnxContextDAO(IUrbanContextDAO):
     """DAO para extraer POIs de contexto urbano (comisarías, cámaras, etc.)."""
 
-    def __init__(self, db_session: Session):
-        self.db = db_session
+    def __init__(self, db: Session):
+        self.db = db
         setup_osmnx()
 
     def extract_pois(self, place_name: str, tags: dict) -> gpd.GeoDataFrame:
