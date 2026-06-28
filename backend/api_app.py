@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -11,7 +11,6 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# --- CORS: permitir que el frontend se conecte ---
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],   # en producción cambiar a la URL del frontend
@@ -20,8 +19,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Handler de errores de validación Pydantic ---
-# FastAPI devuelve 422 con su propio formato; lo convertimos al formato uniforme del proyecto.
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     return JSONResponse(
@@ -36,3 +33,10 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 # --- Registrar routers ---
 app.include_router(route_router)
 app.include_router(geocode_router)
+
+
+# --- Health check endpoint (sin autenticación) ---
+@app.get("/api/v1/health", tags=["Health"])
+async def health_check():
+    """Endpoint de salud sin autenticación."""
+    return {"status": "ok", "version": "1.0.0"}
