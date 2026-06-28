@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from geoalchemy2 import Geometry
 from app.db.base import Base
 
+
 class StreetNode(Base):
     __tablename__ = "street_nodes"
 

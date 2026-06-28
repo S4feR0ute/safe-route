@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, Float
 from app.db.base import Base
 
+
 class DistrictCrimeStats(Base):
     __tablename__ = "district_crime_stats"
 
