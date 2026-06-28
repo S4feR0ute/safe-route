@@ -6,6 +6,7 @@ if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 from app.db.session import SessionLocal
+from app.db.transactions import transaction
 from app.models.crime_type_weight import CrimeTypeWeight
 from app.core.constants import CRIME_WEIGHTS_MAP, STREET_CRIMES
 
@@ -15,7 +16,7 @@ def run_seed_crime_weights():
     """
     db = SessionLocal()
 
-    try:
+    with transaction(db):
         print("--- Seed: pesos por tipo de delito ---")
 
         insertados = 0
@@ -41,8 +42,6 @@ def run_seed_crime_weights():
                 db.add(nuevo)
                 insertados += 1
 
-        db.commit()
-
         print(f"  -> {insertados} tipos insertados, {actualizados} actualizados")
         print("\nPesos cargados:")
 
@@ -50,13 +49,6 @@ def run_seed_crime_weights():
         for entry in todos:
             calle = "callejero" if entry.is_street_crime else "interior"
             print(f"  [{entry.danger_weight:.2f}] {entry.subtype_name} ({calle})")
-
-    except Exception as error:
-        db.rollback()
-        print(f"Error: {error}")
-        raise
-    finally:
-        db.close()
 
 
 if __name__ == "__main__":
