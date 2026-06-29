@@ -111,14 +111,14 @@ class InputSanitizationMiddleware(BaseHTTPMiddleware):
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Rate limiting por IP con límites más estrictos para endpoints sensibles."""
+    """Rate limiting por IP con límites diferenciados por endpoint."""
 
-    def __init__(self, app, requests_per_minute: int = 60):
+    def __init__(self, app, requests_per_minute: int = 120):
         super().__init__(app)
-        self.requests_per_minute = requests_per_minute
-        self.auth_requests_per_minute = 30  # Límite más estricto para auth
+        self.general_limit = requests_per_minute
+        self.auth_limit = 30          # POST /api/v1/auth/*
+        self.report_limit = 10        # POST /api/v1/reports (cubre anón y auth)
         self.request_history: Dict[str, list] = {}
-        self.sensitive_paths = ["/api/v1/auth/register", "/api/v1/auth/login"]
 
     async def dispatch(self, request: Request, call_next):
         from datetime import datetime, timedelta
@@ -135,13 +135,18 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         else:
             self.request_history[client_ip] = []
 
-        # Determinar límite según endpoint
-        is_auth_endpoint = any(request.url.path.startswith(path) for path in self.sensitive_paths)
-        limit = self.auth_requests_per_minute if is_auth_endpoint else self.requests_per_minute
+        # Determinar límite según endpoint y método
+        limit = self.general_limit
+
+        if request.method == "POST":
+            if request.url.path.startswith("/api/v1/auth/"):
+                limit = self.auth_limit
+            elif request.url.path.startswith("/api/v1/reports"):
+                limit = self.report_limit
 
         # Verificar si excedió el límite
         if len(self.request_history[client_ip]) >= limit:
-            logger.warning(f"Rate limit exceeded for {client_ip} on {request.url.path}")
+            logger.warning(f"Rate limit exceeded for {client_ip} on {request.method} {request.url.path}")
             return JSONResponse(
                 status_code=429,
                 content={

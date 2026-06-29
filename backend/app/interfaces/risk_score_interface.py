@@ -15,6 +15,11 @@ class IRiskScoreRepository(ABC):
         pass
 
     @abstractmethod
+    def get_scores_mapped_by_nodes(self) -> Dict[tuple, float]:
+        """Retorna un diccionario: {(source_node, target_node) -> composite_score} para routing."""
+        pass
+
+    @abstractmethod
     def save_score(self, segment_id: int, district_score: float, context_score: float, composite_score: float) -> RiskScore:
         """Crea o actualiza el score para un segmento."""
         pass

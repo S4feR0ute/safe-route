@@ -62,11 +62,14 @@ class AuthErrorResponse(BaseModel):
     """Response de error de auth."""
     error: dict = Field(..., description="Error details")
 
-    class Config:
-        example = {
-            "error": {
-                "code": "INVALID_CREDENTIALS",
-                "message": "Email o contraseña incorrectos",
-                "details": {}
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "error": {
+                    "code": "INVALID_CREDENTIALS",
+                    "message": "Email o contraseña incorrectos",
+                    "details": {}
+                }
             }
         }
+    }

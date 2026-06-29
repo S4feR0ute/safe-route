@@ -30,6 +30,26 @@ class RiskScoreRepository(IRiskScoreRepository):
         ).all()
         return {segment_id: score for segment_id, score in scores}
 
+    def get_scores_mapped_by_nodes(self) -> Dict[tuple, float]:
+        """
+        Retorna un diccionario: {(source_node, target_node) -> composite_score}
+        Para uso en RoutingService.
+        """
+        from app.models.street_network import StreetSegment
+        from sqlalchemy.orm import joinedload
+
+        segments = self.db.query(
+            StreetSegment.source_node_id,
+            StreetSegment.target_node_id,
+            RiskScore.composite_score
+        ).join(
+            RiskScore, StreetSegment.id == RiskScore.segment_id
+        ).filter(
+            RiskScore.composite_score.isnot(None)
+        ).all()
+
+        return {(src, tgt): score for src, tgt, score in segments}
+
     def save_score(self, segment_id: int, district_score: float, context_score: float, composite_score: float) -> RiskScore:
         """Crea o actualiza el score para un segmento."""
         existing = self.db.query(RiskScore).filter(

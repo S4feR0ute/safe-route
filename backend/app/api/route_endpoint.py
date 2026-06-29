@@ -8,6 +8,7 @@ from app.schemas.route_schemas import RouteRequest, RouteResponse
 from app.core.service_container import ServiceContainer, get_service_container
 from app.core.constants import RIESGO_BAJO, RIESGO_MEDIO, VELOCIDAD_PEATONAL_MPM, DISTANCIA_MAXIMA_M
 from app.core.error_handler import ErrorHandler
+from app.core.exceptions import EmptyGraphError, NoRouteError, NodeNotFoundError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["routing"])
@@ -59,12 +60,11 @@ def calcular_ruta(
             destino_lat=request.destination.lat,
             destino_lon=request.destination.lon,
         )
-    except ValueError as e:
-        msg = str(e)
-        if "vacío" in msg:
-            return ErrorHandler.service_unavailable(
-                message="Los datos de rutas no han sido inicializados"
-            )
+    except EmptyGraphError:
+        return ErrorHandler.service_unavailable(
+            message="Los datos de rutas no han sido inicializados"
+        )
+    except (NoRouteError, NodeNotFoundError):
         return ErrorHandler.not_found("No existe una ruta peatonal disponible")
     except Exception as e:
         logger.exception(f"Route calculation error: {type(e).__name__}")
