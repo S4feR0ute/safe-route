@@ -116,10 +116,10 @@ CREATE TABLE IF NOT EXISTS users (
     locked_until TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP
+    deleted_at TIMESTAMP,
 
     CONSTRAINT chk_user_type CHECK (user_type IN ('citizen', 'moderator', 'admin')),
-    CONSTRAINT chk_moderator_role CHECK (moderator_role IS NULL OR moderator_role IN ('moderator', 'admin')),
+    CONSTRAINT chk_moderator_role CHECK (moderator_role IS NULL OR moderator_role IN ('moderator', 'admin'))
 );
 
 -- Tabla: Reportes de Incidencias (anónimos, autenticados, con documentos)
