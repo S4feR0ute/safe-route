@@ -2,7 +2,7 @@ import os
 import pandas as pd
 from datetime import datetime
 from sqlalchemy.orm import Session
-from backend.app.core.config import DATABASE_URL
+from app.core.config import DATABASE_URL
 from app.interfaces.crime_interface import ICrimeRepository
 from app.models.crime_raw import CrimeRawData
 

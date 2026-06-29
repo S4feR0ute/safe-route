@@ -1,5 +1,5 @@
 from typing import Dict, Optional, Tuple
-from backend.app.interfaces.risk_score_interface import IRiskScoreRepository
+from app.interfaces.risk_score_interface import IRiskScoreRepository
 from sqlalchemy.orm import Session
 from app.models.risk_score import RiskScore
 

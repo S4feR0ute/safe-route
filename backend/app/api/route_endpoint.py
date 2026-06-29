@@ -1,62 +1,72 @@
 import math
+import logging
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.schemas.route_schemas import RouteRequest, RouteResponse
-from app.services.routing_service import RoutingService
+from app.core.service_container import ServiceContainer, get_service_container
 from app.core.constants import RIESGO_BAJO, RIESGO_MEDIO, VELOCIDAD_PEATONAL_MPM, DISTANCIA_MAXIMA_M
-from app.core.exceptions import error_response
+from app.core.error_handler import ErrorHandler
 
-
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["routing"])
 
 
 @router.get("/health")
 def health_check(db: Session = Depends(get_db)):
-    """Verificación de vida del servicio (RF para Docker healthcheck)."""
+    """Verificación de vida del servicio."""
     try:
         db.execute(__import__("sqlalchemy").text("SELECT 1"))
         return {"status": "ok", "database": "ok"}
-    except Exception:
-        return error_response(
-            code="SERVICE_UNAVAILABLE",
-            message="La base de datos no está disponible.",
-            status_code=503
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return ErrorHandler.service_unavailable(
+            message="La base de datos no está disponible"
         )
 
 
 @router.post("/route")
-def calcular_ruta(request: RouteRequest, db: Session = Depends(get_db)):
+def calcular_ruta(
+    request: RouteRequest,
+    container: ServiceContainer = Depends(get_service_container)
+):
     """
     Calcula la ruta peatonal más segura entre origen y destino.
-    Opcionalmente también devuelve la ruta más corta para comparación.
-    """
 
+    **Parámetros:**
+    - `include_shortest`: Si incluir ruta más corta para comparación
+
+    **Respuesta exitosa:**
+    - `safe_route`: Ruta optimizada por seguridad (GeoJSON + métricas)
+    - `shortest_route`: Ruta más corta (si include_shortest=true)
+    - `comparison`: Comparación de métricas entre rutas
+
+    **Errores posibles:**
+    - 400: Coordenadas inválidas (muy cercanas o fuera de rango)
+    - 404: No existe ruta peatonal entre los puntos
+    - 503: Datos de rutas no cargados en la base de datos
+    """
     dist_lineal = _distancia_metros(
         request.origin.lat, request.origin.lon,
         request.destination.lat, request.destination.lon
     )
 
     if dist_lineal < 50:
-        return error_response(
-            code="INVALID_COORDINATES",
-            message="El origen y el destino son el mismo punto (menos de 50m de diferencia).",
-            status_code=400,
+        return ErrorHandler.validation_error(
+            message="El origen y el destino son el mismo punto (menos de 50m)",
             details={"distancia_m": round(dist_lineal, 1)}
         )
 
     if dist_lineal > DISTANCIA_MAXIMA_M:
-        return error_response(
-            code="INVALID_COORDINATES",
-            message=f"La distancia en línea recta supera el límite de {DISTANCIA_MAXIMA_M/1000:.0f} km.",
-            status_code=400,
+        return ErrorHandler.validation_error(
+            message=f"Distancia máxima permitida: {DISTANCIA_MAXIMA_M/1000:.0f} km",
             details={"distancia_m": round(dist_lineal, 1)}
         )
 
     try:
-        service = RoutingService(db=db)
-        resultado = service.calcular_rutas(
+        routing_service = container.get_routing_service()
+        resultado = routing_service.calcular_rutas(
             origen_lat=request.origin.lat,
             origen_lon=request.origin.lon,
             destino_lat=request.destination.lat,
@@ -65,21 +75,14 @@ def calcular_ruta(request: RouteRequest, db: Session = Depends(get_db)):
     except ValueError as e:
         msg = str(e)
         if "vacío" in msg:
-            return error_response(
-                code="SERVICE_UNAVAILABLE",
-                message="Los datos de rutas aún no han sido calculados. Contacta al administrador.",
-                status_code=503
+            return ErrorHandler.service_unavailable(
+                message="Los datos de rutas no han sido inicializados"
             )
-        return error_response(
-            code="NO_ROUTE_FOUND",
-            message="No existe una ruta peatonal entre los puntos indicados.",
-            status_code=404
-        )
-    except Exception:
-        return error_response(
-            code="INTERNAL_ERROR",
-            message="Ocurrió un error interno. Por favor intenta de nuevo.",
-            status_code=500
+        return ErrorHandler.not_found("No existe una ruta peatonal disponible")
+    except Exception as e:
+        logger.exception(f"Route calculation error: {type(e).__name__}")
+        return ErrorHandler.internal_error(
+            message="Error al calcular la ruta"
         )
 
     ruta_segura = resultado["ruta_segura"]

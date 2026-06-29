@@ -1,21 +1,10 @@
-"""
-Validadores personalizados para prevenir inyección SQL y parámetros malformados.
-Sprint 3 - Seguridad (OWASP Top 10)
-"""
 import re
 from typing import Any
-from pydantic import field_validator, ValidationInfo
 from email_validator import validate_email, EmailNotValidError
 
 
 class SQLInjectionValidator:
-    """
-    Detecta patrones comunes de inyección SQL.
-    Nota: SQLAlchemy usa parámetros preparados por defecto, pero esta validación
-    proporciona defensa en profundidad.
-    """
 
-    # Patrones SQL peligrosos
     SQL_PATTERNS = [
         r"(\bOR\b|AND\b).*=.*",  # OR/AND logic
         r"(;|--|\*|\/\*|\*\/)",  # SQL comments/terminators
@@ -23,140 +12,188 @@ class SQLInjectionValidator:
         r"(xp_|sp_)",  # SQL Server stored procedures
     ]
 
-    SQL_REGEX = re.compile("|".join(SQL_PATTERNS), re.IGNORECASE)
+    _regex = re.compile("|".join(SQL_PATTERNS), re.IGNORECASE)
 
     @staticmethod
     def is_safe(value: str) -> bool:
-        """Verifica si un string es seguro contra SQL injection."""
+        """True si el valor no contiene patrones SQL peligrosos."""
         if not isinstance(value, str):
             return True
-        return not SQLInjectionValidator.SQL_REGEX.search(value)
+        return not SQLInjectionValidator._regex.search(value)
 
     @staticmethod
     def validate(value: str, field_name: str = "field") -> str:
-        """Valida un string contra SQL injection. Lanza ValueError si es inseguro."""
+        """Lanza ValueError si encuentra patrones SQL peligrosos."""
         if not SQLInjectionValidator.is_safe(value):
             raise ValueError(f"{field_name} contiene caracteres no permitidos")
         return value
 
 
-class InputValidator:
-    """Validadores comunes para inputs de usuario."""
+class EmailValidator:
+    """Única responsabilidad: Validar emails."""
 
     @staticmethod
-    def validate_email(email: str) -> str:
-        """Valida email contra formato y inyección SQL."""
+    def validate(email: str) -> str:
+        """Valida formato y previene SQL injection."""
+        if not email or not isinstance(email, str):
+            raise ValueError("Email debe ser un string")
+
         try:
             valid = validate_email(email)
             email = valid.email
         except EmailNotValidError as e:
             raise ValueError(f"Email inválido: {str(e)}")
 
-        # Validar contra SQL injection
         SQLInjectionValidator.validate(email, "email")
         return email
 
+
+class PasswordValidator:
+    """Única responsabilidad: Validar contraseñas."""
+
+    MIN_LENGTH = 8
+    MAX_LENGTH = 72  # Límite de bcrypt
+
     @staticmethod
-    def validate_password(password: str) -> str:
-        """
-        Valida contraseña:
-        - Mínimo 8 caracteres
-        - Al menos una mayúscula, una minúscula, un número
-        """
-        if len(password) < 8:
-            raise ValueError("Contraseña debe tener al menos 8 caracteres")
-        if len(password) > 255:
-            raise ValueError("Contraseña muy larga (máximo 255 caracteres)")
+    def validate(password: str) -> str:
+        """Valida: longitud, mayúscula, minúscula, números."""
+        if len(password) < PasswordValidator.MIN_LENGTH:
+            raise ValueError(f"Mínimo {PasswordValidator.MIN_LENGTH} caracteres")
+        if len(password) > PasswordValidator.MAX_LENGTH:
+            raise ValueError(f"Máximo {PasswordValidator.MAX_LENGTH} caracteres (límite de bcrypt)")
 
         if not re.search(r"[a-z]", password):
-            raise ValueError("Contraseña debe contener minúsculas")
+            raise ValueError("Debe contener minúsculas")
         if not re.search(r"[A-Z]", password):
-            raise ValueError("Contraseña debe contener mayúsculas")
+            raise ValueError("Debe contener mayúsculas")
         if not re.search(r"[0-9]", password):
-            raise ValueError("Contraseña debe contener números")
+            raise ValueError("Debe contener números")
 
         return password
 
+
+class StringValidator:
+    """Única responsabilidad: Validar strings genéricos."""
+    
+    DANGEROUS_CONTROL_PATTERN = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]")
+
     @staticmethod
-    def validate_string(value: str, field_name: str = "field", max_length: int = 255) -> str:
-        """
-        Valida string genérico:
-        - No contiene SQL injection
-        - Longitud máxima
-        - Sin caracteres de control peligrosos
-        """
+    def validate(value: str, field_name: str = "field", max_length: int = 255) -> str:
+        """Valida: tipo, no vacío, longitud, SQL injection, control chars."""
         if not isinstance(value, str):
             raise ValueError(f"{field_name} debe ser string")
 
-        if len(value) == 0:
+        if not value.strip():
             raise ValueError(f"{field_name} no puede estar vacío")
 
         if len(value) > max_length:
-            raise ValueError(f"{field_name} no puede exceder {max_length} caracteres")
+            raise ValueError(f"{field_name} máximo {max_length} caracteres")
 
-        # Validar contra SQL injection
         SQLInjectionValidator.validate(value, field_name)
 
-        # Validar sin caracteres de control peligrosos
-        if re.search(r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]", value):
-            raise ValueError(f"{field_name} contiene caracteres de control no permitidos")
+        if StringValidator.DANGEROUS_CONTROL_PATTERN.search(value):
+            raise ValueError(f"{field_name} contiene caracteres de control peligrosos")
 
         return value.strip()
 
+
+class CoordinateValidator:
+    """Única responsabilidad: Validar coordenadas geográficas."""
+
+    # Límites de Lima Metropolitana
+    LAT_MIN, LAT_MAX = -12.3, -11.8
+    LON_MIN, LON_MAX = -77.2, -76.8
+
     @staticmethod
-    def validate_coordinates(lat: float, lon: float) -> tuple[float, float]:
-        """
-        Valida coordenadas geográficas (Lima Metropolitana).
-        - Latitud: -12.3 a -11.8
-        - Longitud: -77.2 a -76.8
-        """
+    def validate(lat: float, lon: float) -> tuple[float, float]:
+        """Valida coordenadas dentro de Lima Metropolitana."""
         try:
             lat = float(lat)
             lon = float(lon)
         except (ValueError, TypeError):
             raise ValueError("Coordenadas deben ser números")
 
-        # Validar rango de Lima
-        if not (-12.3 <= lat <= -11.8):
-            raise ValueError("Latitud fuera de rango de Lima Metropolitana (-12.3 a -11.8)")
-        if not (-77.2 <= lon <= -76.8):
-            raise ValueError("Longitud fuera de rango de Lima Metropolitana (-77.2 a -76.8)")
+        if not (CoordinateValidator.LAT_MIN <= lat <= CoordinateValidator.LAT_MAX):
+            raise ValueError(
+                f"Latitud fuera de rango "
+                f"({CoordinateValidator.LAT_MIN} a {CoordinateValidator.LAT_MAX})"
+            )
+        if not (CoordinateValidator.LON_MIN <= lon <= CoordinateValidator.LON_MAX):
+            raise ValueError(
+                f"Longitud fuera de rango "
+                f"({CoordinateValidator.LON_MIN} a {CoordinateValidator.LON_MAX})"
+            )
 
         return lat, lon
 
+
+class IntegerValidator:
+    """Única responsabilidad: Validar enteros."""
+
     @staticmethod
-    def validate_integer(value: Any, field_name: str = "field", min_val: int = None, max_val: int = None) -> int:
-        """Valida que sea entero dentro de rango."""
+    def validate(
+        value: Any,
+        field_name: str = "field",
+        min_val: int = None,
+        max_val: int = None
+    ) -> int:
+        """Valida tipo y rango."""
         try:
             value = int(value)
         except (ValueError, TypeError):
-            raise ValueError(f"{field_name} debe ser un número entero")
+            raise ValueError(f"{field_name} debe ser número entero")
 
         if min_val is not None and value < min_val:
-            raise ValueError(f"{field_name} no puede ser menor que {min_val}")
+            raise ValueError(f"{field_name} mínimo: {min_val}")
         if max_val is not None and value > max_val:
-            raise ValueError(f"{field_name} no puede ser mayor que {max_val}")
+            raise ValueError(f"{field_name} máximo: {max_val}")
 
         return value
 
 
+class InputValidator:
+    """Interfaz de compatibilidad que delega a validadores específicos."""
+
+    @staticmethod
+    def validate_email(email: str) -> str:
+        return EmailValidator.validate(email)
+
+    @staticmethod
+    def validate_password(password: str) -> str:
+        return PasswordValidator.validate(password)
+
+    @staticmethod
+    def validate_string(value: str, field_name: str = "field", max_length: int = 255) -> str:
+        return StringValidator.validate(value, field_name, max_length)
+
+    @staticmethod
+    def validate_coordinates(lat: float, lon: float) -> tuple[float, float]:
+        return CoordinateValidator.validate(lat, lon)
+
+    @staticmethod
+    def validate_integer(
+        value: Any,
+        field_name: str = "field",
+        min_val: int = None,
+        max_val: int = None
+    ) -> int:
+        return IntegerValidator.validate(value, field_name, min_val, max_val)
+
+
 class SchemaValidators:
-    """
-    Validadores Pydantic reutilizables.
-    Se usan con @field_validator en Pydantic models.
-    """
+    """Alias para field validators en Pydantic (@field_validator)."""
 
     @staticmethod
     def validate_email_field(value: str) -> str:
-        """Para usar en Pydantic: @field_validator('email')"""
-        return InputValidator.validate_email(value)
+        """@field_validator('email', mode='before')"""
+        return EmailValidator.validate(value)
 
     @staticmethod
     def validate_password_field(value: str) -> str:
-        """Para usar en Pydantic: @field_validator('password')"""
-        return InputValidator.validate_password(value)
+        """@field_validator('password', mode='before')"""
+        return PasswordValidator.validate(value)
 
     @staticmethod
     def validate_string_field(value: str, max_length: int = 255) -> str:
-        """Para usar en Pydantic: @field_validator('name')"""
-        return InputValidator.validate_string(value, max_length=max_length)
+        """@field_validator('name', mode='before')"""
+        return StringValidator.validate(value, max_length=max_length)

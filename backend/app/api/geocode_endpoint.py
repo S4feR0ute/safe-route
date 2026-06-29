@@ -1,24 +1,41 @@
+import logging
 from fastapi import APIRouter
 
 from app.schemas.geocode_schemas import GeocodeResponse, GeocodeResult
 from app.services.nominatim_service import NominatimService
-from app.core.exceptions import error_response
+from app.core.error_handler import ErrorHandler
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["geocoding"])
 
 
-@router.get("/geocode")
+@router.get("/geocode", response_model=GeocodeResponse)
 def geocodificar(q: str):
     """
-    Proxy de geocodificación contra Nominatim.
-    Recibe un texto de búsqueda y devuelve hasta 5 candidatos
-    dentro del área de Lima Metropolitana + Callao.
+    Geocodificación de direcciones contra Nominatim (OpenStreetMap).
+
+    **Parámetros:**
+    - `q`: Texto de búsqueda (dirección, lugar, coordenadas, etc.)
+
+    **Respuesta exitosa (200):**
+    - `results`: Lista de candidatos encontrados (máx 5)
+    - `total`: Cantidad de resultados
+    - Cada resultado incluye: `display_name`, `lat`, `lon`
+
+    **Notas:**
+    - Los resultados se filtran automáticamente a Lima Metropolitana
+    - Requiere conexión a internet (Nominatim API)
+    - Timeout: 10 segundos
+
+    **Errores posibles:**
+    - 400: Parámetro 'q' vacío
+    - 503: Nominatim no disponible o timeout
+    - 500: Error interno
     """
     if not q or not q.strip():
-        return error_response(
-            code="INVALID_COORDINATES",
-            message="El parámetro 'q' no puede estar vacío.",
-            status_code=400
+        return ErrorHandler.validation_error(
+            message="Parámetro 'q' requerido",
+            field="q"
         )
 
     try:
@@ -39,21 +56,13 @@ def geocodificar(q: str):
 
         return GeocodeResponse(results=resultados, total=len(resultados))
 
-    except TimeoutError as e:
-        return error_response(
-            code="SERVICE_UNAVAILABLE",
-            message=str(e),
-            status_code=503
+    except (TimeoutError, ConnectionError) as e:
+        logger.warning(f"Nominatim service unavailable: {e}")
+        return ErrorHandler.service_unavailable(
+            message="Servicio de geocodificación no disponible"
         )
-    except ConnectionError as e:
-        return error_response(
-            code="SERVICE_UNAVAILABLE",
-            message=str(e),
-            status_code=503
-        )
-    except Exception:
-        return error_response(
-            code="INTERNAL_ERROR",
-            message="Error al procesar la búsqueda. Intenta de nuevo.",
-            status_code=500
+    except Exception as e:
+        logger.exception(f"Geocoding error: {type(e).__name__}")
+        return ErrorHandler.internal_error(
+            message="Error al procesar la búsqueda"
         )
