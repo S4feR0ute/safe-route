@@ -7,6 +7,7 @@ from app.api.route_endpoint import router as route_router
 from app.api.geocode_endpoint import router as geocode_router
 from app.api.auth_endpoint import router as auth_router
 from app.api.report_endpoints import router as report_router
+from app.api.moderation_endpoints import router as moderation_router
 from app.middleware.security_middleware import (
     SecurityHeadersMiddleware,
     InputSanitizationMiddleware,
@@ -53,6 +54,7 @@ app.include_router(route_router)
 app.include_router(geocode_router)
 app.include_router(auth_router)
 app.include_router(report_router)
+app.include_router(moderation_router)
 
 
 # --- Health check endpoint (sin autenticación) ---
