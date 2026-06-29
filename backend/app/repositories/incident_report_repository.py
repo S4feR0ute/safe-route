@@ -12,14 +12,17 @@ class IncidentReportRepository(IIncidentReportRepository):
     def __init__(self, db: Session):
         self.db = db
 
-    def create(self, incident_type: str, location_wkt: str, mode: int, user_id: Optional[int] = None, description: Optional[str] = None) -> IncidentReport:
+    def create(self, incident_type: str, location_wkt: str, latitude: float, longitude: float, mode: int, user_id: Optional[int] = None, description: Optional[str] = None) -> IncidentReport:
         """
         Crea un nuevo reporte.
         location_wkt: formato WKT, ej: 'SRID=4326;POINT(-77.0428 -12.0464)'
+        latitude, longitude: coordenadas numéricas
         """
         report = IncidentReport(
             incident_type=incident_type,
             location=WKTElement(location_wkt, srid=4326),
+            latitude=latitude,
+            longitude=longitude,
             mode=mode,
             user_id=user_id,
             description=description,

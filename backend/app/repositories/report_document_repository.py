@@ -31,7 +31,6 @@ class ReportDocumentRepository(IReportDocumentRepository):
             original_filename=original_filename,
             description=description,
             storage_type=storage_type,
-            scan_status="pending",
         )
         self.db.add(document)
         self.db.flush()

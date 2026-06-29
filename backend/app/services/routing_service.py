@@ -1,10 +1,10 @@
+import logging
 import networkx as nx
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from app.interfaces.street_graph_interface import IStreetGraphDAO
-from app.repositories.osmnx_street_graph_dao import OSMnxStreetGraphDAO
-from app.repositories.risk_score_repository import RiskScoreRepository
+from app.interfaces.risk_score_interface import IRiskScoreRepository
 from app.core.constants import (
     ALPHA_RISK,
     SCORE_NEUTRO,
@@ -13,38 +13,41 @@ from app.core.constants import (
     RIESGO_MEDIO,
     DEGRADACION_ROJO_MAX,
 )
+from app.core.exceptions import EmptyGraphError, NoRouteError, NodeNotFoundError
+
+logger = logging.getLogger(__name__)
 
 
 class RoutingService:
     """
     Servicio de ruteo usando algoritmo de Dijkstra ponderado.
     """
-    def __init__(self, db: Session, graph_dao: IStreetGraphDAO = None):
+    def __init__(self, db: Session, graph_dao: IStreetGraphDAO, score_repo: IRiskScoreRepository):
         self.db = db
-        self._graph_dao = graph_dao
-        self._score_repo = RiskScoreRepository(db)
+        self.graph_dao = graph_dao
+        self.score_repo = score_repo
 
     def calcular_rutas(self, origen_lat: float, origen_lon: float, destino_lat: float, destino_lon: float) -> dict:
-        print("Cargando grafo desde la BD...")
+        logger.info("Cargando grafo desde la BD...")
         graph = self._cargar_grafo_con_scores()
 
         if graph.number_of_nodes() == 0:
-            raise ValueError("El grafo está vacío. Ejecuta primero ingest_street_graph.py")
+            raise EmptyGraphError("El grafo está vacío. Ejecuta primero ingest_street_graph.py")
 
-        print("Buscando nodos más cercanos al origen y destino...")
+        logger.info("Buscando nodos más cercanos al origen y destino...")
         nodo_origen  = self._nodo_mas_cercano(graph, origen_lat, origen_lon)
         nodo_destino = self._nodo_mas_cercano(graph, destino_lat, destino_lon)
-        print(f"  Nodo origen: {nodo_origen} | Nodo destino: {nodo_destino}")
+        logger.info(f"Nodo origen: {nodo_origen} | Nodo destino: {nodo_destino}")
 
-        print("Calculando ruta segura (Dijkstra ponderado por riesgo)...")
+        logger.info("Calculando ruta segura (Dijkstra ponderado por riesgo)...")
         try:
             path_segura = nx.dijkstra_path(graph, nodo_origen, nodo_destino, weight="cost")
         except nx.NetworkXNoPath:
-            raise ValueError("No existe ruta entre los puntos seleccionados")
+            raise NoRouteError("No existe ruta entre los puntos seleccionados")
         except nx.NodeNotFound as e:
-            raise ValueError(f"Nodo no encontrado en el grafo: {e}")
+            raise NodeNotFoundError(f"Nodo no encontrado en el grafo: {e}")
 
-        print("Calculando ruta corta (Dijkstra por longitud)...")
+        logger.info("Calculando ruta corta (Dijkstra por longitud)...")
         try:
             path_corta = nx.dijkstra_path(graph, nodo_origen, nodo_destino, weight="length")
         except nx.NetworkXNoPath:
@@ -74,9 +77,7 @@ class RoutingService:
         }
 
     def _cargar_grafo_con_scores(self) -> nx.MultiDiGraph:
-        dao = self._graph_dao or OSMnxStreetGraphDAO(db=self.db)
-        graph = dao.load_graph()
-
+        graph = self.graph_dao.load_graph()
         scores_map = self._cargar_scores_por_arista()
 
         aristas_con_score = 0
@@ -90,30 +91,12 @@ class RoutingService:
             if (u, v) in scores_map:
                 aristas_con_score += 1
 
-        print(f"  {aristas_con_score}/{graph.number_of_edges()} aristas con score asignado")
+        logger.info(f"{aristas_con_score}/{graph.number_of_edges()} aristas con score asignado")
         return graph
 
     def _cargar_scores_por_arista(self) -> dict:
-        """
-        Carga scores desde RiskScoreRepository y los mapea por (source_node, target_node).
-        """
-        sql = text("""
-            SELECT
-                seg.source_node_id,
-                seg.target_node_id,
-                rs.composite_score
-            FROM risk_scores rs
-            JOIN street_segments seg ON rs.segment_id = seg.id
-            WHERE rs.composite_score IS NOT NULL
-        """)
-
-        rows = self.db.execute(sql).fetchall()
-
-        scores_dict = {}
-        for source_node, target_node, score in rows:
-            scores_dict[(source_node, target_node)] = score
-
-        return scores_dict
+        """Carga scores desde el repository mapeados por nodos."""
+        return self.score_repo.get_scores_mapped_by_nodes()
 
     def _nodo_mas_cercano(self, graph: nx.MultiDiGraph, lat: float, lon: float) -> int:
         """
@@ -209,10 +192,7 @@ class RoutingService:
 
     def _get_categoria(self, security_score: int, segmentos: list = None) -> str:
         """
-        Determina categoría de la ruta con degradación (SAF-44).
-
-        Regla de degradación: Si más del 10% de la longitud total es rojo
-        (composite_score > 0.60), la ruta se degrada de "Segura" a "Moderada".
+        Determina categoría de la ruta con degradación.
         """
         if security_score >= CATEGORIA_SEGURA:
             categoria_base = "Segura"

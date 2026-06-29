@@ -22,7 +22,7 @@ class FileConfig:
     MAX_REPORT_SIZE_BYTES = 50 * 1024 * 1024
 
     # Directorio base de uploads
-    UPLOAD_BASE_DIR = Path("backend/uploads")
+    UPLOAD_BASE_DIR = Path("uploads")
 
     # Crear directorio si no existe
     UPLOAD_BASE_DIR.mkdir(parents=True, exist_ok=True)

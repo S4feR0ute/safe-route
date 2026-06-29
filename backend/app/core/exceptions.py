@@ -12,6 +12,41 @@ class ApiException(Exception):
         super().__init__(message)
 
 
+class ServiceError(Exception):
+    """Excepción base para errores de servicios."""
+    pass
+
+
+class EmptyGraphError(ServiceError):
+    """El grafo de calles está vacío."""
+    pass
+
+
+class NoRouteError(ServiceError):
+    """No existe ruta entre los puntos especificados."""
+    pass
+
+
+class NodeNotFoundError(ServiceError):
+    """Nodo no encontrado en el grafo."""
+    pass
+
+
+class DuplicateEmailError(ServiceError):
+    """El email ya está registrado."""
+    pass
+
+
+class AccountLockedError(ServiceError):
+    """Cuenta bloqueada por demasiados intentos fallidos."""
+    pass
+
+
+class InvalidCredentialsError(ServiceError):
+    """Credenciales inválidas."""
+    pass
+
+
 def error_response(code: str, message: str, status_code: int, details: Optional[dict] = None) -> JSONResponse:
     """Factory para crear respuestas de error consistentes."""
     return JSONResponse(
