@@ -13,24 +13,6 @@ router = APIRouter(prefix="/api/v1", tags=["geocoding"])
 def geocodificar(q: str):
     """
     Geocodificación de direcciones contra Nominatim (OpenStreetMap).
-
-    **Parámetros:**
-    - `q`: Texto de búsqueda (dirección, lugar, coordenadas, etc.)
-
-    **Respuesta exitosa (200):**
-    - `results`: Lista de candidatos encontrados (máx 5)
-    - `total`: Cantidad de resultados
-    - Cada resultado incluye: `display_name`, `lat`, `lon`
-
-    **Notas:**
-    - Los resultados se filtran automáticamente a Lima Metropolitana
-    - Requiere conexión a internet (Nominatim API)
-    - Timeout: 10 segundos
-
-    **Errores posibles:**
-    - 400: Parámetro 'q' vacío
-    - 503: Nominatim no disponible o timeout
-    - 500: Error interno
     """
     if not q or not q.strip():
         return ErrorHandler.validation_error(

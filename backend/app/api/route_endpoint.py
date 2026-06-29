@@ -33,19 +33,6 @@ def calcular_ruta(
 ):
     """
     Calcula la ruta peatonal más segura entre origen y destino.
-
-    **Parámetros:**
-    - `include_shortest`: Si incluir ruta más corta para comparación
-
-    **Respuesta exitosa:**
-    - `safe_route`: Ruta optimizada por seguridad (GeoJSON + métricas)
-    - `shortest_route`: Ruta más corta (si include_shortest=true)
-    - `comparison`: Comparación de métricas entre rutas
-
-    **Errores posibles:**
-    - 400: Coordenadas inválidas (muy cercanas o fuera de rango)
-    - 404: No existe ruta peatonal entre los puntos
-    - 503: Datos de rutas no cargados en la base de datos
     """
     dist_lineal = _distancia_metros(
         request.origin.lat, request.origin.lon,

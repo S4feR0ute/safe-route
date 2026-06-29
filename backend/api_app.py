@@ -2,9 +2,15 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+
 from app.api.route_endpoint import router as route_router
 from app.api.geocode_endpoint import router as geocode_router
-from app.middleware.security_middleware import SecurityHeadersMiddleware, InputSanitizationMiddleware
+from app.api.auth_endpoint import router as auth_router
+from app.middleware.security_middleware import (
+    SecurityHeadersMiddleware,
+    InputSanitizationMiddleware,
+    RateLimitMiddleware
+)
 
 app = FastAPI(
     title="SafeRoute API",
@@ -12,6 +18,7 @@ app = FastAPI(
     version="1.0.0",
 )
 
+app.add_middleware(RateLimitMiddleware, requests_per_minute=120)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(InputSanitizationMiddleware)
 
@@ -25,18 +32,25 @@ app.add_middleware(
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = []
+    for error in exc.errors():
+        errors.append({
+            "field": str(error.get("loc", [])),
+            "message": str(error.get("msg", ""))
+        })
     return JSONResponse(
         status_code=422,
         content={"error": {
             "code": "VALIDATION_ERROR",
             "message": "Los datos enviados no tienen el formato correcto.",
-            "details": exc.errors(),
+            "details": {"errors": errors},
         }},
     )
 
 # --- Registrar routers ---
 app.include_router(route_router)
 app.include_router(geocode_router)
+app.include_router(auth_router)
 
 
 # --- Health check endpoint (sin autenticación) ---
