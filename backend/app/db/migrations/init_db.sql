@@ -1,9 +1,5 @@
 CREATE EXTENSION IF NOT EXISTS postgis;
 
--- ============================================================================
--- TABLAS: Ruteo (Sprints 1-4)
--- ============================================================================
-
 -- Tabla para los Nodos del Grafo (Intersecciones/Cruces)
 CREATE TABLE IF NOT EXISTS street_nodes (
     node_id BIGINT PRIMARY KEY,

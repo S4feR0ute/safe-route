@@ -1,5 +1,7 @@
 import logging
+from typing import Dict
 from fastapi import Request
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 logger = logging.getLogger(__name__)
@@ -109,17 +111,50 @@ class InputSanitizationMiddleware(BaseHTTPMiddleware):
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Rate limiting básico por IP"""
+    """Rate limiting por IP con límites más estrictos para endpoints sensibles."""
 
     def __init__(self, app, requests_per_minute: int = 60):
         super().__init__(app)
         self.requests_per_minute = requests_per_minute
-        self.request_history = {}
+        self.auth_requests_per_minute = 30  # Límite más estricto para auth
+        self.request_history: Dict[str, list] = {}
+        self.sensitive_paths = ["/api/v1/auth/register", "/api/v1/auth/login"]
 
     async def dispatch(self, request: Request, call_next):
-        # En producción, usamos Redis o similar
-        # Aquí es un ejemplo básico en memoria
+        from datetime import datetime, timedelta
+
         client_ip = request.client.host if request.client else "unknown"
+        now = datetime.utcnow()
+
+        # Limpiar historial antiguo
+        if client_ip in self.request_history:
+            self.request_history[client_ip] = [
+                ts for ts in self.request_history[client_ip]
+                if now - ts < timedelta(minutes=1)
+            ]
+        else:
+            self.request_history[client_ip] = []
+
+        # Determinar límite según endpoint
+        is_auth_endpoint = any(request.url.path.startswith(path) for path in self.sensitive_paths)
+        limit = self.auth_requests_per_minute if is_auth_endpoint else self.requests_per_minute
+
+        # Verificar si excedió el límite
+        if len(self.request_history[client_ip]) >= limit:
+            logger.warning(f"Rate limit exceeded for {client_ip} on {request.url.path}")
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "error": {
+                        "code": "RATE_LIMIT_EXCEEDED",
+                        "message": "Demasiadas solicitudes. Intenta de nuevo en 1 minuto.",
+                        "details": {"retry_after_seconds": 60}
+                    }
+                }
+            )
+
+        # Registrar timestamp de esta solicitud
+        self.request_history[client_ip].append(now)
 
         response = await call_next(request)
         return response

@@ -1,21 +1,29 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 import jwt
-from passlib.context import CryptContext
+import hashlib
+import secrets
 from fastapi import HTTPException, status
-from app.core.config import JWT_SECRET_KEY, JWT_ALGORITHM, JWT_EXPIRATION, BCRYPT_ROUNDS
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=BCRYPT_ROUNDS)
+from app.core.config import JWT_SECRET_KEY, JWT_ALGORITHM, JWT_EXPIRATION
 
 
 def hash_password(password: str) -> str:
-    """Hash de contraseña con bcrypt."""
-    return pwd_context.hash(password)
+    """Hash de contraseña con PBKDF2-SHA256."""
+    password = password[:72].encode('utf-8')
+    salt = secrets.token_hex(16)
+    hash_obj = hashlib.pbkdf2_hmac('sha256', password, salt.encode(), 100000)
+    return f"{salt}${hash_obj.hex()}"
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verifica contraseña contra su hash."""
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        plain_password = plain_password[:72].encode('utf-8')
+        salt, hash_hex = hashed_password.split('$')
+        hash_obj = hashlib.pbkdf2_hmac('sha256', plain_password, salt.encode(), 100000)
+        return hash_obj.hex() == hash_hex
+    except Exception:
+        return False
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
