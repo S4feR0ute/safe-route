@@ -8,6 +8,7 @@ from app.services.crime_analytics_service import CrimeAnalyticsService
 from app.services.score_calculator_service import ScoreCalculatorService
 from app.services.file_storage_service import FileStorageService
 from app.services.report_service import ReportService
+from app.services.moderation_service import ModerationService
 from app.repositories.factory import RepositoryFactory
 from app.interfaces.user_interface import IUserRepository
 from app.interfaces.incident_report_interface import IIncidentReportRepository
@@ -73,6 +74,13 @@ class ServiceContainer:
             return ReportService(db=self.db, incident_repo=incident_repo)
 
         return self._get_or_create('report_service', _create)
+    
+    def get_moderation_service(self) -> ModerationService:
+        """Instancia única de ReportService"""
+        return self._get_or_create(
+            'moderation_service',
+            lambda: ModerationService(db=self.db)
+        )
 
     def get_incident_repository(self) -> IIncidentReportRepository:
         """Instancia única cacheada de IncidentReportRepository."""
