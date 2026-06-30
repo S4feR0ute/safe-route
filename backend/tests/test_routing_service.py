@@ -2,6 +2,7 @@ import pytest
 import networkx as nx
 
 from app.interfaces.street_graph_interface import IStreetGraphDAO
+from app.interfaces.risk_score_interface import IRiskScoreRepository
 from app.services.routing_service import RoutingService
 
 
@@ -19,6 +20,28 @@ class FakeStreetGraphDAO(IStreetGraphDAO):
 
     def load_graph(self) -> nx.MultiDiGraph:
         return self._graph
+
+
+class FakeRiskScoreRepository(IRiskScoreRepository):
+    """Repositorio falso de scores: devuelve scores sinteticos sin tocar la BD."""
+
+    def __init__(self, scores: dict):
+        self._scores = scores
+
+    def get_scores_by_edge(self, segment_id):
+        return None
+
+    def get_all_scores_as_dict(self):
+        return {}
+
+    def save_score(self, *args, **kwargs):
+        pass
+
+    def get_scores_mapped_by_nodes(self):
+        return self._scores
+
+    def bulk_save_scores(self, scores_data):
+        return 0
 
 
 def construir_grafo_sintetico() -> nx.MultiDiGraph:
@@ -62,14 +85,13 @@ def scores_sinteticos():
 def routing_service(monkeypatch, scores_sinteticos):
     grafo = construir_grafo_sintetico()
     fake_dao = FakeStreetGraphDAO(grafo)
+    fake_score_repo = FakeRiskScoreRepository(scores_sinteticos)
 
-    # La carga de scores normalmente consulta la BD real; la reemplazamos
-    # para que use nuestros valores sinteticos sin tocar la base de datos.
     monkeypatch.setattr(
         RoutingService, "_cargar_scores_por_arista", lambda self: scores_sinteticos
     )
 
-    return RoutingService(db=None, graph_dao=fake_dao)
+    return RoutingService(db=None, graph_dao=fake_dao, score_repo=fake_score_repo)
 
 
 def test_ruta_segura_prefiere_camino_largo_pero_seguro(routing_service):
