@@ -35,6 +35,12 @@ const MapClickHandler = ({ onSelectPoint, origen, destino }) => {
         onSelectPoint('destino', coords);
       }
     },
+    
+    contextmenu(e) {
+      const coords = { lat: e.latlng.lat, lng: e.latlng.lng };
+      // Avisamos a la página principal que abra la ventanita
+      window.dispatchEvent(new CustomEvent('openIncidentModal', { detail: coords }));
+    }
   });
 
   return null;

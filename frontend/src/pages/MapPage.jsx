@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import MapView from '../components/MapView';
 import RouteForm from '../components/RouteForm';
 import ResultsPanel from '../components/ResultsPanel';
+import IncidentModal from '../components/IncidentModal';
 import { fetchRoute } from '../services/routeApi';
 import { isAuthenticated, logout } from '../services/authApi';
+import { createIncidentReport } from '../services/reportApi';
 
 const MapPage = () => {
   const navigate = useNavigate();
@@ -16,6 +18,34 @@ const MapPage = () => {
   const [error, setError] = useState(null);
 
   const isAuth = isAuthenticated();
+
+  // modal - reportes
+  const [modalOpen, setModalOpen] = useState(false);
+  const [reportCoords, setReportCoords] = useState(null);
+
+  // Escuchar el evento de click derecho del mapa
+  useEffect(() => {
+    const handleOpenModal = (e) => {
+      setReportCoords(e.detail);
+      setModalOpen(true);
+    };
+    window.addEventListener('openIncidentModal', handleOpenModal);
+    return () => window.removeEventListener('openIncidentModal', handleOpenModal);
+  }, []);
+
+  // Función para enviar el reporte al backend
+  const handleSubmitReport = async (reportData) => {
+    try {
+      // Sacamos la llave (si existe) para saber si es Modo 1 o Modo 2/3
+      const token = localStorage.getItem('token');
+      await createIncidentReport(reportData, token);
+      
+      alert("¡Reporte enviado exitosamente a moderación!");
+
+    } catch (err) {
+      throw err; // El Modal atrapará este error y lo mostrará en un alert
+    }
+  };
 
   const handleSelectPoint = (type, coords) => {
     if (type === 'origen') {
@@ -50,7 +80,7 @@ const MapPage = () => {
 
   const handleLogout = () => {
     logout();
-    navigate(0); // Refresca la página para ocultar los botones de usuario
+    navigate(0); // Actualizar la página
   };
 
   return (
@@ -79,13 +109,24 @@ const MapPage = () => {
         loading={loading}
         error={error}
       />
+      
       <MapView
         origen={origen}
         destino={destino}
         onSelectPoint={handleSelectPoint}
         routeData={routeData}
+        reports={[]}
       />
+      
       <ResultsPanel routeData={routeData} />
+
+      <IncidentModal 
+        isOpen={modalOpen} 
+        onClose={() => setModalOpen(false)}
+        onSubmit={handleSubmitReport}
+        coords={reportCoords || { lat: 0, lng: 0 }}
+        isAuthenticated={isAuth}
+      />
     </div>
   );
 };
