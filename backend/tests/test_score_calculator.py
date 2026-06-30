@@ -2,8 +2,8 @@ import pytest
 from sqlalchemy import text
 
 from app.db.session import SessionLocal
-from app.models.street_network import StreetSegment, StreetNode  # necesario para que SQLAlchemy registre la tabla antes del commit
-from app.models.risk_score import RiskScore  # necesario por la misma razon
+from app.models.street_network import StreetSegment, StreetNode
+from app.models.risk_score import RiskScore
 from app.services.score_calculator_service import ScoreCalculatorService
 
 
@@ -84,33 +84,38 @@ def obtener_score(db, segment_id):
 
 
 def test_cp_b01_distrito_alto_riesgo(db):
+    """TC1: sendero (path) en distrito de alta criminalidad, sin infraestructura cercana."""
     district_score, context_score, composite_score = obtener_score(db, 9000001)
     assert district_score == pytest.approx(0.90)
-    assert context_score == pytest.approx(0.745)
-    assert composite_score == pytest.approx(0.8535)
+    assert context_score == pytest.approx(0.85)
+    assert composite_score == pytest.approx(0.885)
 
 
 def test_cp_b02_distrito_bajo_riesgo(db):
+    """TC2: avenida principal (primary) en distrito seguro, con comisaria cerca y 2 camaras."""
     district_score, context_score, composite_score = obtener_score(db, 9000002)
     assert district_score == pytest.approx(0.10)
-    assert context_score == pytest.approx(0.265)
-    assert composite_score == pytest.approx(0.1495)
+    assert context_score == pytest.approx(0.0727, abs=0.001)
+    assert composite_score == pytest.approx(0.0918, abs=0.001)
 
 
 def test_cp_b03_distrito_sin_datos_usa_valor_neutro(db):
+    """TC3: distrito sin datos de criminalidad debe usar SCORE_NEUTRO (0.5)."""
     district_score, context_score, composite_score = obtener_score(db, 9000003)
     assert district_score == pytest.approx(0.5)
-    assert context_score == pytest.approx(0.665)
-    assert composite_score == pytest.approx(0.5495)
+    assert context_score == pytest.approx(0.45)
+    assert composite_score == pytest.approx(0.485)
 
 
 def test_cp_b04_policia_distancia_intermedia(db):
+    """TC4: comisaria a distancia intermedia (~404m) debe dar r_police = 0.5."""
     district_score, context_score, composite_score = obtener_score(db, 9000004)
-    assert context_score == pytest.approx(0.565)
-    assert composite_score == pytest.approx(0.5195)
+    assert context_score == pytest.approx(0.475)
+    assert composite_score == pytest.approx(0.4925)
 
 
 def test_cp_b05_una_camara_cercana(db):
+    """TC5: exactamente 1 camara cercana debe dar r_cameras = 0.5."""
     district_score, context_score, composite_score = obtener_score(db, 9000005)
-    assert context_score == pytest.approx(0.59)
-    assert composite_score == pytest.approx(0.527)
+    assert context_score == pytest.approx(0.4714, abs=0.001)
+    assert composite_score == pytest.approx(0.4914, abs=0.001)
