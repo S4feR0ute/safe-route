@@ -6,7 +6,7 @@ import ResultsPanel from '../components/ResultsPanel';
 import IncidentModal from '../components/IncidentModal';
 import { fetchRoute } from '../services/routeApi';
 import { isAuthenticated, logout } from '../services/authApi';
-import { createIncidentReport } from '../services/reportApi';
+import { createIncidentReport, getIncidentReports } from '../services/reportApi';
 
 const MapPage = () => {
   const navigate = useNavigate();
@@ -22,6 +22,22 @@ const MapPage = () => {
   // modal - reportes
   const [modalOpen, setModalOpen] = useState(false);
   const [reportCoords, setReportCoords] = useState(null);
+
+  // Estado para guardar la lista de reportes
+  const [reportsList, setReportsList] = useState([]);
+
+  // Para mostrar/ocultar los pines
+  const [showReports, setShowReports] = useState(true);
+
+  // Cargar los reportes cuando la página inicia
+  const fetchReports = async () => {
+    const data = await getIncidentReports();
+    setReportsList(data);
+  };
+
+  useEffect(() => {
+    fetchReports();
+  }, []);
 
   // Escuchar el evento de click derecho del mapa
   useEffect(() => {
@@ -41,6 +57,7 @@ const MapPage = () => {
       await createIncidentReport(reportData, token);
       
       alert("¡Reporte enviado exitosamente a moderación!");
+      await fetchReports();
 
     } catch (err) {
       throw err; // El Modal atrapará este error y lo mostrará en un alert
@@ -100,6 +117,19 @@ const MapPage = () => {
         )}
       </div>
 
+      <button
+        onClick={() => setShowReports(!showReports)}
+        style={{
+          position: 'absolute', bottom: 30, right: 20, zIndex: 1000,
+          padding: '12px 20px', background: showReports ? '#6c757d' : '#dc3545',
+          color: 'white', border: 'none', borderRadius: '30px',
+          boxShadow: '0 4px 10px rgba(0,0,0,0.3)', cursor: 'pointer',
+          fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px'
+        }}
+      >
+        {showReports ? 'Ocultar Alertas' : 'Mostrar Alertas'}
+      </button>
+
       <RouteForm
         origen={origen}
         destino={destino}
@@ -115,7 +145,8 @@ const MapPage = () => {
         destino={destino}
         onSelectPoint={handleSelectPoint}
         routeData={routeData}
-        reports={[]}
+        reports={reportsList}
+        showReports={showReports}
       />
       
       <ResultsPanel routeData={routeData} />
