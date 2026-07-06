@@ -1,10 +1,11 @@
 import networkx as nx
 from abc import ABC, abstractmethod
+from typing import Union, List
 
 
 class IStreetGraphDAO(ABC):
     @abstractmethod
-    def extract_graph(self, place_name: str) -> nx.MultiDiGraph:
+    def extract_graph(self, place_name: Union[str, List[str]]) -> nx.MultiDiGraph:
         """Extrae un grafo vial desde OpenStreetMap."""
         pass
 
