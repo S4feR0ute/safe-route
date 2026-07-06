@@ -84,33 +84,41 @@ def obtener_score(db, segment_id):
 
 
 def test_cp_b01_distrito_alto_riesgo(db):
+    # TC1: path (0.85), sin POIs -> solo factor vía activo: context = 0.85
     district_score, context_score, composite_score = obtener_score(db, 9000001)
     assert district_score == pytest.approx(0.90)
-    assert context_score == pytest.approx(0.745)
-    assert composite_score == pytest.approx(0.8535)
+    assert context_score == pytest.approx(0.85)
+    assert composite_score == pytest.approx(0.885)
 
 
 def test_cp_b02_distrito_bajo_riesgo(db):
+    # TC2: primary (0.20), comisaría a 0m (r=0), 2 cámaras (r=0)
+    # context = (0.2*0.20 + 0.2*0 + 0.15*0) / 0.55 = 0.0727
     district_score, context_score, composite_score = obtener_score(db, 9000002)
     assert district_score == pytest.approx(0.10)
-    assert context_score == pytest.approx(0.265)
-    assert composite_score == pytest.approx(0.1495)
+    assert context_score == pytest.approx(0.0727)
+    assert composite_score == pytest.approx(0.0918)
 
 
 def test_cp_b03_distrito_sin_datos_usa_valor_neutro(db):
+    # TC3: residential (0.45), sin POIs, distrito sin stats -> district neutro 0.5
     district_score, context_score, composite_score = obtener_score(db, 9000003)
     assert district_score == pytest.approx(0.5)
-    assert context_score == pytest.approx(0.665)
-    assert composite_score == pytest.approx(0.5495)
+    assert context_score == pytest.approx(0.45)
+    assert composite_score == pytest.approx(0.485)
 
 
 def test_cp_b04_policia_distancia_intermedia(db):
+    # TC4: residential (0.45), comisaría a ~400m (r=0.5)
+    # context = (0.2*0.45 + 0.2*0.5) / 0.4 = 0.475
     district_score, context_score, composite_score = obtener_score(db, 9000004)
-    assert context_score == pytest.approx(0.565)
-    assert composite_score == pytest.approx(0.5195)
+    assert context_score == pytest.approx(0.475)
+    assert composite_score == pytest.approx(0.4925)
 
 
 def test_cp_b05_una_camara_cercana(db):
+    # TC5: residential (0.45), 1 cámara (r=0.5)
+    # context = (0.2*0.45 + 0.15*0.5) / 0.35 = 0.4714
     district_score, context_score, composite_score = obtener_score(db, 9000005)
-    assert context_score == pytest.approx(0.59)
-    assert composite_score == pytest.approx(0.527)
+    assert context_score == pytest.approx(0.4714)
+    assert composite_score == pytest.approx(0.4914)

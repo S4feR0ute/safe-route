@@ -66,31 +66,31 @@ def routing_service(monkeypatch, scores_sinteticos):
     # La carga de scores normalmente consulta la BD real; la reemplazamos
     # para que use nuestros valores sinteticos sin tocar la base de datos.
     monkeypatch.setattr(
-        RoutingService, "_cargar_scores_por_arista", lambda self: scores_sinteticos
+        RoutingService, "_load_edge_scores", lambda self: scores_sinteticos
     )
 
-    return RoutingService(db=None, graph_dao=fake_dao)
+    return RoutingService(db=None, graph_dao=fake_dao, score_repo=None)
 
 
 def test_ruta_segura_prefiere_camino_largo_pero_seguro(routing_service):
-    resultado = routing_service.calcular_rutas(
-        origen_lat=0, origen_lon=0, destino_lat=0.005, destino_lon=0
+    resultado = routing_service.calculate_routes(
+        origin_lat=0, origin_lon=0, dest_lat=0.005, dest_lon=0
     )
-    ruta_segura = resultado["ruta_segura"]
+    safe_route = resultado["safe_route"]
 
-    assert ruta_segura["nodos"] == [1, 2, 3, 4]
-    assert ruta_segura["longitud_total_m"] == pytest.approx(1200.0)
-    assert ruta_segura["security_score"] == 90
-    assert ruta_segura["categoria"] == "Segura"
+    assert safe_route["nodes"] == [1, 2, 3, 4]
+    assert safe_route["total_length_m"] == pytest.approx(1200.0)
+    assert safe_route["security_score"] == 90
+    assert safe_route["category"] == "Segura"
 
 
 def test_ruta_corta_prefiere_camino_directo_pero_riesgoso(routing_service):
-    resultado = routing_service.calcular_rutas(
-        origen_lat=0, origen_lon=0, destino_lat=0.005, destino_lon=0
+    resultado = routing_service.calculate_routes(
+        origin_lat=0, origin_lon=0, dest_lat=0.005, dest_lon=0
     )
-    ruta_corta = resultado["ruta_corta"]
+    short_route = resultado["short_route"]
 
-    assert ruta_corta["nodos"] == [1, 4]
-    assert ruta_corta["longitud_total_m"] == pytest.approx(1000.0)
-    assert ruta_corta["security_score"] == 10
-    assert ruta_corta["categoria"] == "Riesgosa"
+    assert short_route["nodes"] == [1, 4]
+    assert short_route["total_length_m"] == pytest.approx(1000.0)
+    assert short_route["security_score"] == 10
+    assert short_route["category"] == "Riesgosa"
