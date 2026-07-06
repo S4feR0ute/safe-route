@@ -2,8 +2,8 @@ import pytest
 from sqlalchemy import text
 
 from app.db.session import SessionLocal
-from app.models.street_network import StreetSegment, StreetNode  # necesario para que SQLAlchemy registre la tabla antes del commit
-from app.models.risk_score import RiskScore  # necesario por la misma razon
+from app.models.street_network import StreetSegment, StreetNode
+from app.models.risk_score import RiskScore
 from app.services.score_calculator_service import ScoreCalculatorService
 
 

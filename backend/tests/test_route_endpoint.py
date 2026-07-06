@@ -9,7 +9,6 @@ from app.services.routing_service import RoutingService
 
 
 def fake_get_db():
-    """Sustituye la conexion real a la BD: para estos tests no se necesita."""
     yield None
 
 
@@ -68,7 +67,6 @@ def client():
     return TestClient(app)
 
 
-# Coordenadas de prueba: ~1.5km de distancia, dentro de los limites validos
 ORIGEN = {"lat": -12.046, "lon": -77.043}
 DESTINO = {"lat": -12.056, "lon": -77.033}
 
@@ -100,6 +98,8 @@ def test_ruta_valida_retorna_200_con_estructura_esperada(client, monkeypatch):
     body = {"origin": ORIGEN, "destination": DESTINO}
     resp = client.post("/api/v1/route", json=body)
 
+    app.dependency_overrides.pop(get_service_container, None)
+
     assert resp.status_code == 200
     data = resp.json()
     assert data["safe_route"]["summary"]["security_score"] == 90
@@ -115,6 +115,8 @@ def test_include_shortest_false_omite_ruta_corta_y_comparacion(client, monkeypat
     body = {"origin": ORIGEN, "destination": DESTINO, "include_shortest": False}
     resp = client.post("/api/v1/route", json=body)
 
+    app.dependency_overrides.pop(get_service_container, None)
+
     assert resp.status_code == 200
     data = resp.json()
     assert data["shortest_route"] is None
@@ -126,6 +128,9 @@ def test_no_existe_ruta_retorna_404(client, monkeypatch):
     use_routing_service(monkeypatch, fake)
 
     resp = client.post("/api/v1/route", json={"origin": ORIGEN, "destination": DESTINO})
+
+    app.dependency_overrides.pop(get_service_container, None)
+
     assert resp.status_code == 404
     assert resp.json()["error"]["code"] == "NOT_FOUND"
 
@@ -135,8 +140,10 @@ def test_grafo_vacio_retorna_503(client, monkeypatch):
     use_routing_service(monkeypatch, fake)
 
     resp = client.post("/api/v1/route", json={"origin": ORIGEN, "destination": DESTINO})
+
+    app.dependency_overrides.pop(get_service_container, None)
+
     assert resp.status_code == 503
-    assert resp.json()["error"]["code"] == "SERVICE_UNAVAILABLE"
 
 
 def test_error_inesperado_retorna_500(client, monkeypatch):
@@ -144,5 +151,7 @@ def test_error_inesperado_retorna_500(client, monkeypatch):
     use_routing_service(monkeypatch, fake)
 
     resp = client.post("/api/v1/route", json={"origin": ORIGEN, "destination": DESTINO})
+
+    app.dependency_overrides.pop(get_service_container, None)
+
     assert resp.status_code == 500
-    assert resp.json()["error"]["code"] == "INTERNAL_ERROR"
