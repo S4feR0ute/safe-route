@@ -16,8 +16,9 @@ class IncidentReport(Base):
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
     description = Column(String(1000), nullable=True)
+    occurred_at = Column(DateTime, nullable=True)
     status = Column(String(20), default="pending", index=True)
-    mode = Column(Integer, default=1, index=True)  # 1=anón, 2=auth, 3=con docs
+    mode = Column(Integer, default=1, index=True)  # 1=anón, 2=auth, 3=auth+docs
     severity_level = Column(String(20), default="medium")
     has_documents = Column(Boolean, default=False, index=True)
     document_count = Column(Integer, default=0)
