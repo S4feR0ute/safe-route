@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS crime_types_weights (
 );
 
 -- Tabla de Criminalidad (datos sin procesar)
-CREATE TABLE IF NOT EXISTS crimen_raw_data (
+CREATE TABLE IF NOT EXISTS crime_raw_data (
     id SERIAL PRIMARY KEY,
     district_ubigeo VARCHAR(10),
     district_name TEXT,
@@ -131,6 +131,7 @@ CREATE TABLE IF NOT EXISTS incident_reports (
     latitude FLOAT NOT NULL,
     longitude FLOAT NOT NULL,
     description VARCHAR(1000),
+    occurred_at TIMESTAMP,
     status VARCHAR(20) NOT NULL DEFAULT 'pending',
     mode INTEGER NOT NULL DEFAULT 1,
     severity_level VARCHAR(20) DEFAULT 'medium',
@@ -176,6 +177,17 @@ CREATE INDEX IF NOT EXISTS idx_segments_district_ubigeo
 
 CREATE INDEX IF NOT EXISTS idx_street_segments_geometry
     ON street_segments USING GIST (geometry);
+
+-- Índices funcionales sobre geography: las queries de scoring usan
+-- ST_DWithin(geometry::geography, ...) y sin estos índices caen a seq scan.
+CREATE INDEX IF NOT EXISTS idx_street_segments_geography
+    ON street_segments USING GIST ((geometry::geography));
+
+CREATE INDEX IF NOT EXISTS idx_urban_pois_geography
+    ON urban_pois USING GIST ((geometry::geography));
+
+CREATE INDEX IF NOT EXISTS idx_incident_reports_geography
+    ON incident_reports USING GIST ((location::geography));
 
 -- Índices: Usuarios
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
