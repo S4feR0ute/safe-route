@@ -75,7 +75,7 @@ def obtener_stats(db, ubigeo):
 
 def test_pesos_se_cargan_desde_la_bd_no_desde_el_fallback(db):
     service = CrimeAnalyticsService(db=db)
-    pesos = service._cargar_pesos()
+    pesos = service._load_weights()
     assert pesos == {"ROBO": 1.0, "HURTO": 0.5}
 
 

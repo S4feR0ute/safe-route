@@ -3,9 +3,9 @@ from fastapi.testclient import TestClient
 
 from api_app import app
 from app.db.session import get_db
-from app.core.service_container import ServiceContainer, get_service_container
+from app.core.service_container import ServiceContainer
 from app.core.exceptions import EmptyGraphError, NoRouteError
-import app.api.route_endpoint as route_endpoint
+from app.services.routing_service import RoutingService
 
 
 def fake_get_db():
@@ -15,45 +15,51 @@ def fake_get_db():
 app.dependency_overrides[get_db] = fake_get_db
 
 
-def make_fake_container(resultado=None, excepcion=None):
-    """Crea un ServiceContainer falso que devuelve resultado o lanza excepcion."""
-    class FakeRoutingService:
-        def calcular_rutas(self, **kwargs):
-            if excepcion:
-                raise excepcion
-            return resultado
+class FakeRoutingServiceOK(RoutingService):
+    """Simula una respuesta exitosa del RoutingService, sin tocar la BD ni OSMnx.
 
-    class FakeContainer:
-        def get_routing_service(self):
-            return FakeRoutingService()
+    Hereda de RoutingService para reutilizar build_route_response real.
+    """
 
-    return FakeContainer()
+    def __init__(self):
+        super().__init__(db=None, graph_dao=None, score_repo=None)
 
-
-RESULTADO_OK = {
-    "ruta_segura": {
-        "nodos": [1, 2, 3, 4],
-        "segmentos": [{
+    def calculate_routes(self, **kwargs):
+        safe_segment = {
             "source_node": 1, "target_node": 2, "name": "Calle Test",
             "length_m": 1200.0, "composite_score": 0.10,
             "coordinates": [[0, 0], [0, 0.005]],
-        }],
-        "longitud_total_m": 1200.0,
-        "security_score": 90,
-        "categoria": "Segura",
-    },
-    "ruta_corta": {
-        "nodos": [1, 4],
-        "segmentos": [{
-            "source_node": 1, "target_node": 4, "name": "Calle Corta",
+        }
+        short_segment = {
+            "source_node": 1, "target_node": 4, "name": "Calle Test Corta",
             "length_m": 1000.0, "composite_score": 0.90,
             "coordinates": [[0, 0], [0, 0.005]],
-        }],
-        "longitud_total_m": 1000.0,
-        "security_score": 10,
-        "categoria": "Riesgosa",
-    },
-}
+        }
+        return {
+            "safe_route": {
+                "nodes": [1, 2, 3, 4], "segments": [safe_segment],
+                "total_length_m": 1200.0, "security_score": 90, "category": "Segura",
+            },
+            "short_route": {
+                "nodes": [1, 4], "segments": [short_segment],
+                "total_length_m": 1000.0, "security_score": 10, "category": "Riesgosa",
+            },
+        }
+
+
+def make_failing_service(excepcion):
+    """Crea una version falsa del RoutingService que siempre lanza la excepcion dada."""
+    class FakeRoutingServiceFail(FakeRoutingServiceOK):
+        def calculate_routes(self, **kwargs):
+            raise excepcion
+    return FakeRoutingServiceFail
+
+
+def use_routing_service(monkeypatch, service_cls):
+    """Hace que el contenedor DI devuelva el servicio falso."""
+    monkeypatch.setattr(
+        ServiceContainer, "get_routing_service", lambda self: service_cls()
+    )
 
 
 @pytest.fixture
@@ -86,8 +92,8 @@ def test_payload_invalido_retorna_422(client):
     assert resp.json()["error"]["code"] == "VALIDATION_ERROR"
 
 
-def test_ruta_valida_retorna_200_con_estructura_esperada(client):
-    app.dependency_overrides[get_service_container] = lambda: make_fake_container(resultado=RESULTADO_OK)
+def test_ruta_valida_retorna_200_con_estructura_esperada(client, monkeypatch):
+    use_routing_service(monkeypatch, FakeRoutingServiceOK)
 
     body = {"origin": ORIGEN, "destination": DESTINO}
     resp = client.post("/api/v1/route", json=body)
@@ -103,8 +109,8 @@ def test_ruta_valida_retorna_200_con_estructura_esperada(client):
     assert len(data["safe_route"]["geojson"]["features"]) == 1
 
 
-def test_include_shortest_false_omite_ruta_corta_y_comparacion(client):
-    app.dependency_overrides[get_service_container] = lambda: make_fake_container(resultado=RESULTADO_OK)
+def test_include_shortest_false_omite_ruta_corta_y_comparacion(client, monkeypatch):
+    use_routing_service(monkeypatch, FakeRoutingServiceOK)
 
     body = {"origin": ORIGEN, "destination": DESTINO, "include_shortest": False}
     resp = client.post("/api/v1/route", json=body)
@@ -117,18 +123,21 @@ def test_include_shortest_false_omite_ruta_corta_y_comparacion(client):
     assert data["comparison"] is None
 
 
-def test_no_existe_ruta_retorna_404(client):
-    app.dependency_overrides[get_service_container] = lambda: make_fake_container(excepcion=NoRouteError("sin ruta"))
+def test_no_existe_ruta_retorna_404(client, monkeypatch):
+    fake = make_failing_service(NoRouteError("No existe ruta entre los puntos seleccionados"))
+    use_routing_service(monkeypatch, fake)
 
     resp = client.post("/api/v1/route", json={"origin": ORIGEN, "destination": DESTINO})
 
     app.dependency_overrides.pop(get_service_container, None)
 
     assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "NOT_FOUND"
 
 
-def test_grafo_vacio_retorna_503(client):
-    app.dependency_overrides[get_service_container] = lambda: make_fake_container(excepcion=EmptyGraphError("grafo vacio"))
+def test_grafo_vacio_retorna_503(client, monkeypatch):
+    fake = make_failing_service(EmptyGraphError("El grafo está vacío"))
+    use_routing_service(monkeypatch, fake)
 
     resp = client.post("/api/v1/route", json={"origin": ORIGEN, "destination": DESTINO})
 
@@ -137,8 +146,9 @@ def test_grafo_vacio_retorna_503(client):
     assert resp.status_code == 503
 
 
-def test_error_inesperado_retorna_500(client):
-    app.dependency_overrides[get_service_container] = lambda: make_fake_container(excepcion=RuntimeError("boom"))
+def test_error_inesperado_retorna_500(client, monkeypatch):
+    fake = make_failing_service(RuntimeError("boom"))
+    use_routing_service(monkeypatch, fake)
 
     resp = client.post("/api/v1/route", json={"origin": ORIGEN, "destination": DESTINO})
 
