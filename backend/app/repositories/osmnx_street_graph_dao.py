@@ -29,22 +29,29 @@ class OSMnxStreetGraphDAO(IStreetGraphDAO):
             self._node_ids_in_db = {row[0] for row in rows}
         return self._node_ids_in_db
 
-    def extract_graph(self, place_name: str) -> nx.MultiDiGraph:
-        print(f"Extrayendo grafo de OSM para: {place_name}...")
+    CHUNK_SIZE = 50_000
+
+    def extract_graph(self, place_name) -> nx.MultiDiGraph:
+        """
+        Descarga el grafo peatonal desde OSM (place_name puede ser un lugar "Miraflores, Lima, Peru")."""
+        label = place_name if isinstance(place_name, str) else f"{len(place_name)} lugares (unión)"
+        print(f"Extrayendo grafo de OSM para: {label}...")
         graph = ox.graph_from_place(place_name, network_type=self.network_type)
         print(f"  -> {graph.number_of_nodes()} nodos, {graph.number_of_edges()} aristas")
         return graph
 
     def save_graph(self, graph: nx.MultiDiGraph, place_name: str) -> int:
+        """Persiste nodos y segmentos por lotes (CHUNK_SIZE) con progreso."""
         known_nodes = self._known_node_ids()
-        new_nodes = []
 
+        buffer = []
+        total_nodes = 0
         for node_id, data in graph.nodes(data=True):
             if node_id in known_nodes:
                 continue
 
             lon, lat = data["x"], data["y"]
-            new_nodes.append(
+            buffer.append(
                 StreetNode(
                     node_id=node_id,
                     geometry=make_point_geometry(lon, lat),
@@ -53,42 +60,51 @@ class OSMnxStreetGraphDAO(IStreetGraphDAO):
                 )
             )
             known_nodes.add(node_id)
+            if len(buffer) >= self.CHUNK_SIZE:
+                total_nodes += self._flush_chunk(buffer, total_nodes, "nodos")
 
-        if new_nodes:
-            self.db.add_all(new_nodes)
-            self.db.flush()
-            print(f"  -> {len(new_nodes)} nodos nuevos guardados")
+        total_nodes += self._flush_chunk(buffer, total_nodes, "nodos")
+        print(f"  -> {total_nodes} nodos guardados")
 
-        segments = []
+        total_segments = 0
         for u, v, _key, data in graph.edges(keys=True, data=True):
             if u not in known_nodes or v not in known_nodes:
                 continue
 
-            segment = StreetSegment(
-                osm_way_id=get_osm_way_id(data),
-                geometry=make_linestring_geometry(graph, u, v, data),
-                name=normalize_tag_value(data.get("name")),
-                length_m=float(data.get("length", 0.0) or 0.0),
-                highway_type=normalize_tag_value(
-                    data.get("highway"), default="unclassified"
-                ),
-                oneway=parse_oneway(data.get("oneway", False)),
-                source_node_id=u,
-                target_node_id=v,
+            buffer.append(
+                StreetSegment(
+                    osm_way_id=get_osm_way_id(data),
+                    geometry=make_linestring_geometry(graph, u, v, data),
+                    name=normalize_tag_value(data.get("name")),
+                    length_m=float(data.get("length", 0.0) or 0.0),
+                    highway_type=normalize_tag_value(
+                        data.get("highway"), default="unclassified"
+                    ),
+                    oneway=parse_oneway(data.get("oneway", False)),
+                    source_node_id=u,
+                    target_node_id=v,
+                )
             )
-            segments.append(segment)
+            if len(buffer) >= self.CHUNK_SIZE:
+                total_segments += self._flush_chunk(buffer, total_segments, "segmentos")
 
-        if segments:
-            self.db.add_all(segments)
-
-        if new_nodes or segments:
-            self.db.commit()
-            print(f"  -> {len(segments)} segmentos guardados para {place_name}")
-        else:
-            print(f"  -> Sin datos nuevos para {place_name}")
+        total_segments += self._flush_chunk(buffer, total_segments, "segmentos")
+        print(f"  -> {total_segments} segmentos guardados para {place_name}")
 
         self._node_ids_in_db = known_nodes
-        return len(segments)
+        return total_segments
+
+    def _flush_chunk(self, buffer: list, done: int, label: str) -> int:
+        """Inserta y commitea el lote acumulado; devuelve cuántos insertó."""
+        if not buffer:
+            return 0
+        count = len(buffer)
+        self.db.add_all(buffer)
+        self.db.commit()
+        self.db.expunge_all()  # libera los objetos ORM ya persistidos
+        buffer.clear()
+        print(f"  ... {done + count} {label}")
+        return count
 
     def load_graph(self) -> nx.MultiDiGraph:
         print("Reconstruyendo el grafo NetworkX desde la base de datos...")

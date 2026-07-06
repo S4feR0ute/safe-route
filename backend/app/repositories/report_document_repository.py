@@ -58,17 +58,12 @@ class ReportDocumentRepository(IReportDocumentRepository):
             ReportDocument.report_id == report_id
         ).order_by(ReportDocument.uploaded_at.desc()).all()
 
-    def hash_exists(self, file_hash_sha256: str) -> bool:
-        """Verifica si un documento con este hash SHA-256 ya existe"""
-        return self.db.query(ReportDocument).filter(
-            ReportDocument.file_hash_sha256 == file_hash_sha256
-        ).first() is not None
-
     def delete(self, document_id: str) -> bool:
         """Elimina un documento por ID"""
         document = self.get_by_id(document_id)
         if document:
             self.db.delete(document)
+            self.db.flush()
             return True
         return False
 
