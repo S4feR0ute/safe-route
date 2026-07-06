@@ -17,7 +17,7 @@ from app.db.transactions import transaction_no_close
 
 class ReportService:
     """
-    Servicio de reportes de incidentes (RF-14 a RF-16, RF-19).
+    Servicio de reportes de incidentes.
 
     Modos de reporte:
       1 = anónimo: ubicación + tipo + descripción (sin fecha ni archivos)
@@ -102,8 +102,7 @@ class ReportService:
     async def add_document(self, report_id: str, file: UploadFile, user: User) -> ReportDocument:
         """
         Adjunta un documento a un reporte existente (lo promueve a modo 3).
-        Solo el dueño del reporte puede adjuntar; los reportes anónimos no
-        admiten documentos.
+        Solo el dueño del reporte puede adjuntar; los reportes anónimos no admiten documentos.
         """
         report = self._get_report_or_raise(report_id)
 
