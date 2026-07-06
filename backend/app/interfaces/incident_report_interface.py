@@ -63,7 +63,7 @@ class IIncidentReportRepository(ABC):
         limit: int = 200,
         offset: int = 0,
     ) -> Tuple[List, int]:
-        """Obtiene reportes validados para el mapa público (RF-19): (reportes, total)."""
+        """Obtiene reportes validados para el mapa público: (reportes, total)."""
         pass
 
     @abstractmethod
