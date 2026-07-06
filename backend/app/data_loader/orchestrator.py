@@ -25,7 +25,6 @@ class DataLoaderOrchestrator:
     """Orquestador para ejecutar los data loaders en el orden correcto."""
 
     def __init__(self):
-        # (slug, descripción, función). El orden importa.
         self.loaders: List[tuple[str, str, Callable]] = [
             ("seed_crime_weights", "Semilla de pesos por tipo de delito", run_seed_crime_weights),
             ("ingest_street_graph", "Grafo peatonal de OSM", run_street_network_ingestion),
