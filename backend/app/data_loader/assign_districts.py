@@ -64,7 +64,7 @@ def run_district_assignment(districts=None):
 
             # --- Paso 3: Mostrar resumen ---
             print("\n--- Resumen por distrito ---")
-            resumen = service.get_resumen()
+            resumen = service.get_summary()
             for fila in resumen:
                 print(f"  {fila.name} ({fila.ubigeo}): {fila.total_segmentos} segmentos")
 

@@ -1,4 +1,5 @@
 import sys
+import logging
 from pathlib import Path
 
 # Permite ejecutar el script directamente sin instalar el paquete
@@ -8,9 +9,9 @@ if str(BACKEND_ROOT) not in sys.path:
 
 from app.db.session import SessionLocal
 from app.db.transactions import transaction
-from app.models.street_network import StreetSegment, StreetNode  # necesario para que SQLAlchemy registre la tabla antes del commit
-from app.models.risk_score import RiskScore
 from app.services.score_calculator_service import ScoreCalculatorService
+
+logger = logging.getLogger(__name__)
 
 
 def run_score_calculation():
@@ -18,16 +19,19 @@ def run_score_calculation():
     db = SessionLocal()
 
     with transaction(db):
-        print("=== Score Calculator ===")
+        logger.info("=== Score Calculator ===")
         service = ScoreCalculatorService(db=db)
         total = service.calculate_all_scores()
 
         if total > 0:
-            print(f"\nListo. {total} segmentos con composite_score calculado.")
-            print("Puedes verificar con:")
-            print("  SELECT AVG(composite_score), MIN(composite_score), MAX(composite_score)")
-            print("  FROM risk_scores;")
+            logger.info(f"Listo. {total} segmentos con composite_score calculado.")
+            logger.info("Puedes verificar con:")
+            logger.info("  SELECT AVG(composite_score), MIN(composite_score), MAX(composite_score) FROM risk_scores;")
 
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+    )
     run_score_calculation()
