@@ -38,9 +38,7 @@ class ServiceContainer:
         """Limpia el caché (útil para tests)."""
         self._cache.clear()
 
-    # ------------------------------------------------------------------
-    # Repositorios (vía RepositoryFactory, tipados por su interfaz)
-    # ------------------------------------------------------------------
+    # Repositorios
 
     def get_user_repository(self) -> IUserRepository:
         return self._get_or_create(
@@ -66,9 +64,7 @@ class ServiceContainer:
             lambda: RepositoryFactory.create_risk_score_repository(self.db),
         )
 
-    # ------------------------------------------------------------------
-    # Servicios (reciben sus repositorios por inyección)
-    # ------------------------------------------------------------------
+    # Servicios
 
     def get_auth_service(self) -> AuthService:
         return self._get_or_create(
