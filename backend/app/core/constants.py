@@ -131,28 +131,62 @@ UBIGEO_MAP = {
     "Ventanilla, Callao, Peru":                 "070106",
 }
 
-# --- Pesos del score compuesto (SAF-43) ---
-# w_d + w_c + w_r = 1.0
-# Mientras RF-18 no esté implementado, w_r = 0.0
-WEIGHT_DISTRICT = 0.70    # Capa 1: criminalidad distrital (SIDPOL)
-WEIGHT_CONTEXT  = 0.30    # Capa 2: contexto urbano (OSM)
-WEIGHT_REPORT   = 0.00    # Capa 3: reportes verificados (RF-18, Sprint 6)
+# Pesos del score compuesto
+# Capas 1 y 2 forman el score base:
+#   base = WEIGHT_DISTRICT * district_score + WEIGHT_CONTEXT * context_score
+# La capa 3 (reportes ciudadanos validados) se mezcla SOLO donde existe
+# al menos un reporte cercano, para no alterar el score del resto de la red:
+#   composite = (1 - WEIGHT_REPORT) * base + WEIGHT_REPORT * report_score
+WEIGHT_DISTRICT = 0.70    # Capa 1: criminalidad distrital
+WEIGHT_CONTEXT  = 0.30    # Capa 2: contexto urbano
+WEIGHT_REPORT   = 0.15    # Capa 3: reportes validados
 
-# Factor de aversión al riesgo para el Dijkstra (SAF-43)
+# Capa 3: reportes validados 
+# Valores propuestos por el equipo de desarrollo (no existe spec de BA);
+# documentados en backend/DATABASE.md.
+REPORT_INFLUENCE_RADIUS_M = 150   # ST_DWithin: radio de influencia de un reporte
+REPORT_HALF_LIFE_DAYS = 90        # decaimiento exponencial: peso se reduce a la mitad cada 90 días
+REPORT_MAX_AGE_DAYS = 365         # reportes más antiguos no aportan al score
+REPORT_SATURATION = 3.0           # ~3 reportes recientes de peso máximo => riesgo máximo (1.0)
+
+# Peso por tipo de incidente (0-1, mayor = más riesgoso para el peatón)
+REPORT_TYPE_WEIGHTS = {
+    "robo": 1.0,
+    "asalto": 1.0,
+    "violencia": 0.9,
+    "acoso": 0.8,
+    "droga": 0.7,
+    "vandalismo": 0.5,
+    "ocupacion_via": 0.3,
+    "venta_ambulante": 0.3,
+    "otro": 0.4,
+}
+REPORT_TYPE_WEIGHT_DEFAULT = 0.4
+
+# Factor por severidad declarada (el aporte por reporte se capea a 1.0)
+REPORT_SEVERITY_FACTOR = {
+    "low": 0.5,
+    "medium": 0.75,
+    "high": 1.0,
+    "critical": 1.25,
+}
+REPORT_SEVERITY_FACTOR_DEFAULT = 0.75
+
+# Factor de aversión al riesgo para el Dijkstra
 # cost(e) = length_m * (1 + ALPHA * composite_score)
 ALPHA_RISK = 2.0
 
 # Valor neutro cuando no hay datos de distrito o contexto
-SCORE_NEUTRO = 0.5
+NEUTRAL_SCORE = 0.5
 
-# --- Pesos de cada factor dentro del context_score (SAF-16) ---
+# Pesos de cada factor dentro del context_score
 CONTEXT_WEIGHT_LIGHTING  = 0.30   # Factor 1: iluminación
 CONTEXT_WEIGHT_POLICE    = 0.20   # Factor 2: presencia policial
 CONTEXT_WEIGHT_ROAD_TYPE = 0.20   # Factor 3: tipo de vía
 CONTEXT_WEIGHT_CAMERAS   = 0.15   # Factor 4: vigilancia (cámaras + bancos)
 CONTEXT_WEIGHT_COMMERCE  = 0.15   # Factor 5: actividad comercial
 
-# Riesgo por tipo de vía (SAF-16, factor 3 del context_score)
+# Riesgo por tipo de vía
 HIGHWAY_RISK = {
     "primary":        0.20,
     "primary_link":   0.20,
@@ -170,19 +204,18 @@ HIGHWAY_RISK = {
     "path":           0.85,
     "track":          0.90,
 }
-HIGHWAY_RISK_DEFAULT = 0.50   # Valor por defecto si el tipo no está en el mapa
+HIGHWAY_RISK_DEFAULT = 0.50
 
-# --- Umbrales de categorías (SAF-44) ---
-# security_score va de 0 a 100 (mayor = más seguro)
-CATEGORIA_SEGURA    = 70   # >= 70 -> Segura
-CATEGORIA_MODERADA  = 40   # >= 40 -> Moderada, < 40 -> Riesgosa
+# Umbrales de categorías 
+CATEGORY_SAFE_THRESHOLD     = 70   # >= 70 -> "Segura"
+CATEGORY_MODERATE_THRESHOLD = 40   # >= 40 -> "Moderada", < 40 -> "Riesgosa"
 
 # Umbrales de composite_score por segmento (0-1)
-RIESGO_BAJO  = 0.30   # <= 0.30 -> verde
-RIESGO_MEDIO = 0.60   # <= 0.60 -> amarillo, > 0.60 -> rojo
+RISK_LOW    = 0.30   # <= 0.30 -> verde
+RISK_MEDIUM = 0.60   # <= 0.60 -> amarillo, > 0.60 -> rojo
 
 # Regla de degradación: si más del 10% de la longitud es rojo, baja a Moderada
-DEGRADACION_ROJO_MAX = 0.10
+MAX_RED_FRACTION = 0.10
 
 STREET_CRIMES = {
     "ROBO",
@@ -199,28 +232,26 @@ STREET_CRIMES = {
     "EXPOSICION A PELIGRO O ABANDONO DE PERSONAS EN PELIGRO",
 }
 
-# Velocidad peatonal para calcular tiempo (SAF-45: 5 km/h ≈ 83 m/min)
-VELOCIDAD_PEATONAL_MPM = 83.0
+# Velocidad peatonal para calcular tiempo (5 km/h ≈ 83 m/min)
+WALKING_SPEED_MPM = 83.0
 
 # Distancia máxima permitida entre origen y destino (15 km en línea recta)
-DISTANCIA_MAXIMA_M = 15_000
+MAX_DISTANCE_M = 15_000
 
-# Bounding box completo de Lima Metropolitana + Callao (SAF-45)
+# Bounding box completo de Lima Metropolitana + Callao
 # Formato Nominatim: oeste,norte,este,sur
 LIMA_VIEWBOX = "-77.20,-11.57,-76.62,-12.52"
 
 # URL base de Nominatim
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 
-# Nominatim requiere identificar quién hace las peticiones (política de uso)
+# Nominatim requiere identificar quién hace las peticiones
 HEADERS = {
     "User-Agent": "SafeRoute/1.0 (proyecto universitario; contacto: saferoute@example.com)",
 }
 
 # Máximo de resultados a pedir a Nominatim
 MAX_RESULTS = 5
-
-# --- RF-14 a RF-19: Módulo de reportes de ciudadanos ---
 
 # Tipos de incidencia válidos
 INCIDENT_TYPES = {
@@ -235,15 +266,15 @@ INCIDENT_TYPES = {
     "otro",
 }
 
-# Modos de reporte (RF-13 a RF-16)
+# Modos de reporte
 REPORT_MODE_ANONYMOUS = 1       # Sin cuenta, sin documentos
 REPORT_MODE_AUTHENTICATED = 2   # Con cuenta, sin documentos
 REPORT_MODE_DOCUMENTED = 3      # Con cuenta + documentos sustentatorios
 
 # Estados de reporte
-REPORT_STATUS_PENDING = "pending"       # Creado, esperando validación
-REPORT_STATUS_VALIDATED = "validated"   # Aprobado por moderador
-REPORT_STATUS_REJECTED = "rejected"     # Rechazado
+REPORT_STATUS_PENDING = "pending"
+REPORT_STATUS_VALIDATED = "validated"
+REPORT_STATUS_REJECTED = "rejected"
 
 # Radio de búsqueda para reportes cercanos (metros)
 REPORT_SEARCH_RADIUS_M = 500
@@ -252,10 +283,6 @@ REPORT_SEARCH_RADIUS_M = 500
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
 ALLOWED_FILE_TYPES = {"pdf", "jpg", "jpeg", "png"}
 
-# JWT
-JWT_ALGORITHM = "HS256"
-JWT_EXPIRATION_HOURS = 24
-
-# Rate limiting (RF-15: reporte con autenticación)
+# Rate limiting
 REPORTS_PER_USER_PER_DAY = 10  # Máximo reportes/usuario/día
 REPORTS_PER_IP_PER_HOUR = 5    # Máximo reportes/IP/hora (modo 1)
