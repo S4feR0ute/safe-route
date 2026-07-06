@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Dict
 from fastapi import Request
 from fastapi.responses import JSONResponse
@@ -49,19 +50,18 @@ class InputSanitizationMiddleware(BaseHTTPMiddleware):
     """Detecta patrones sospechosos en requests"""
 
     SUSPICIOUS_PATTERNS = [
-        r"(%27)|(\')",  # SQL injection: single quote
-        r"(%23)|(#)",  # SQL injection: hash
-        r"(%2D%2D)|(-–)",  # SQL injection: double dash
-        r"(%3B)|(;)",  # SQL injection: semicolon
-        r"union.*select",  # SQL injection: UNION SELECT
-        r"select.*from",  # SQL injection: SELECT FROM
-        r"insert.*into",  # SQL injection: INSERT INTO
-        r"delete.*from",  # SQL injection: DELETE FROM
-        r"drop.*table",  # SQL injection: DROP TABLE
-        r"<script",  # XSS: script tag
-        r"javascript:",  # XSS: javascript protocol
-        r"onerror=",  # XSS: event handler
-        r"onload=",  # XSS: event handler
+        re.compile(pattern, re.IGNORECASE)
+        for pattern in (
+            r"union.*select",
+            r"select.*from",
+            r"insert.*into",
+            r"delete.*from",
+            r"drop.*table",
+            r"<script",
+            r"javascript:",
+            r"onerror=",
+            r"onload=",
+        )
     ]
 
     async def dispatch(self, request: Request, call_next):
@@ -78,35 +78,18 @@ class InputSanitizationMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         return response
 
-    @staticmethod
-    def _check_suspicious_content(param_name: str, param_value: str, context: str):
-        """Verifica si el contenido parece sospechoso."""
-        import re
-
+    @classmethod
+    def _check_suspicious_content(cls, param_name: str, param_value: str, context: str):
+        """Verifica si el contenido parece sospechoso (solo loguea, no bloquea)."""
         if not isinstance(param_value, str):
             return
 
-        suspicious_value = param_value.lower()
-
-        suspicious_patterns = [
-            r"union.*select",
-            r"select.*from",
-            r"insert.*into",
-            r"delete.*from",
-            r"drop.*table",
-            r"<script",
-            r"javascript:",
-            r"onerror=",
-            r"onload=",
-        ]
-
-        for pattern in suspicious_patterns:
-            if re.search(pattern, suspicious_value):
+        for pattern in cls.SUSPICIOUS_PATTERNS:
+            if pattern.search(param_value):
                 logger.warning(
                     f"Suspicious pattern detected in {context}: "
                     f"{param_name}={param_value[:100]}"
                 )
-                # En producción, podríamos bloquear el request aquí
                 break
 
 
