@@ -1,13 +1,31 @@
 import os
+import logging
 from datetime import timedelta
+from dotenv import load_dotenv
+
+load_dotenv()
+
+logger = logging.getLogger(__name__)
+
+# Environment
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+DEBUG = ENVIRONMENT == "development"
 
 # JWT Configuration
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "tu-clave-secreta-cambiar-123456789abcdef")
+_DEFAULT_JWT_SECRET = "trabajo_final_safe_route_2026"
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", _DEFAULT_JWT_SECRET)
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION = timedelta(minutes=int(os.getenv("JWT_EXPIRATION_MINUTES", 30)))
 
-# Bcrypt Configuration
-BCRYPT_ROUNDS = 12
+if JWT_SECRET_KEY == _DEFAULT_JWT_SECRET:
+    if ENVIRONMENT != "development":
+        raise RuntimeError(
+            "JWT_SECRET_KEY no configurado: define la variable de entorno "
+            "JWT_SECRET_KEY antes de correr fuera de desarrollo."
+        )
+    logger.warning(
+        "JWT_SECRET_KEY usa el valor por defecto (solo aceptable en desarrollo)."
+    )
 
 # API Configuration
 API_VERSION = "1.0.0"
@@ -21,14 +39,13 @@ CORS_ALLOW_METHODS = ["*"]
 CORS_ALLOW_HEADERS = ["*"]
 
 # Database Configuration
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://user:password@localhost:5432/safe_route"
-)
+DATABASE_URL = os.getenv("DATABASE_URL_LOCAL")
 
-# Environment
-ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
-DEBUG = ENVIRONMENT == "development"
+# Fuente de datos SIDPOL (Excel del observatorio MININTER)
+SIDPOL_SOURCE_URL = os.getenv(
+    "SIDPOL_SOURCE_URL",
+    "https://observatorio.mininter.gob.pe/sites/default/files/proyecto/archivos/Base_datos_SIDPOL_Marzo2026.xlsx",
+)
 
 # Logging
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

@@ -1,8 +1,14 @@
-from fastapi import FastAPI, Request, status
+import logging
+from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
+from app.core.config import API_TITLE, API_DESCRIPTION, API_VERSION
+from app.core.error_handler import ErrorHandler
+from app.db.session import get_db
 from app.api.route_endpoint import router as route_router
 from app.api.geocode_endpoint import router as geocode_router
 from app.api.auth_endpoint import router as auth_router
@@ -14,10 +20,12 @@ from app.middleware.security_middleware import (
     RateLimitMiddleware
 )
 
+logger = logging.getLogger(__name__)
+
 app = FastAPI(
-    title="SafeRoute API",
-    description="API de ruteo seguro para peatones. Calcula rutas minimizando el riesgo de criminalidad.",
-    version="1.0.0",
+    title=API_TITLE,
+    description=API_DESCRIPTION,
+    version=API_VERSION,
 )
 
 app.add_middleware(RateLimitMiddleware, requests_per_minute=120)
@@ -59,6 +67,13 @@ app.include_router(moderation_router)
 
 # --- Health check endpoint (sin autenticación) ---
 @app.get("/api/v1/health", tags=["Health"])
-async def health_check():
-    """Endpoint de salud sin autenticación."""
-    return {"status": "ok", "version": "1.0.0"}
+async def health_check(db: Session = Depends(get_db)):
+    """Endpoint de salud: verifica el servicio y la conexión a la BD."""
+    try:
+        db.execute(text("SELECT 1"))
+        return {"status": "ok", "database": "ok", "version": API_VERSION}
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return ErrorHandler.service_unavailable(
+            message="La base de datos no está disponible"
+        )

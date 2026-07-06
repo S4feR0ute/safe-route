@@ -3,7 +3,7 @@ from app.db.base import Base
 
 
 class CrimeRawData(Base):
-    __tablename__ = "crimen_raw_data"
+    __tablename__ = "crime_raw_data"
 
     id = Column(Integer, primary_key=True, index=True)
     district_ubigeo = Column(String(10), index=True)

@@ -7,7 +7,7 @@ class NominatimService:
     Servicio de geocodificación usando la API pública de Nominatim (OSM).
     """
 
-    def buscar(self, query: str) -> list[dict]:
+    def search(self, query: str) -> list[dict]:
         """
         Busca una dirección o lugar y devuelve hasta MAX_RESULTS candidatos.
         """
@@ -35,26 +35,26 @@ class NominatimService:
             raw = response.json()
 
             # Parsear solo los campos que necesitamos
-            resultados = []
+            results = []
             for item in raw:
-                resultados.append({
+                results.append({
                     "display_name": item.get("display_name", ""),
                     "lat": float(item["lat"]),
                     "lon": float(item["lon"]),
                 })
 
-            return resultados
+            return results
 
         except requests.exceptions.Timeout:
             raise TimeoutError("Nominatim no respondió a tiempo. Intenta de nuevo.")
         except requests.exceptions.RequestException as e:
             raise ConnectionError(f"Error al conectarse con Nominatim: {e}")
 
-    def geocodificar_direccion(self, direccion: str) -> dict | None:
+    def geocode_address(self, address: str) -> dict | None:
         """
         Versión simplificada: devuelve solo el primer resultado o None.
         """
-        resultados = self.buscar(direccion)
-        if not resultados:
+        results = self.search(address)
+        if not results:
             return None
-        return resultados[0]
+        return results[0]

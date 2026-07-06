@@ -1,26 +1,14 @@
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, Field
 
 
-class Coordenada(BaseModel):
-    lat: float
-    lon: float
-
-    @validator("lat")
-    def validar_lat(cls, v):
-        if not (-90 <= v <= 90):
-            raise ValueError("lat debe estar entre -90 y 90")
-        return v
-
-    @validator("lon")
-    def validar_lon(cls, v):
-        if not (-180 <= v <= 180):
-            raise ValueError("lon debe estar entre -180 y 180")
-        return v
+class Coordinate(BaseModel):
+    lat: float = Field(..., ge=-90, le=90)
+    lon: float = Field(..., ge=-180, le=180)
 
 
 class RouteRequest(BaseModel):
-    origin:           Coordenada
-    destination:      Coordenada
+    origin:           Coordinate
+    destination:      Coordinate
     include_shortest: bool = True
 
 

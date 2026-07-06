@@ -1,20 +1,37 @@
 import logging
+import time
+import numpy as np
 import pandas as pd
 from sqlalchemy.orm import Session
-from sqlalchemy import text
-from datetime import datetime
+from sqlalchemy import text, bindparam
+from datetime import datetime, timedelta
 
 from app.models.risk_score import RiskScore
-
-logger = logging.getLogger(__name__)
 from app.core.constants import (
     WEIGHT_DISTRICT, WEIGHT_CONTEXT, WEIGHT_REPORT,
-    SCORE_NEUTRO,
+    NEUTRAL_SCORE,
     CONTEXT_WEIGHT_LIGHTING, CONTEXT_WEIGHT_POLICE,
     CONTEXT_WEIGHT_ROAD_TYPE, CONTEXT_WEIGHT_CAMERAS, CONTEXT_WEIGHT_COMMERCE,
     HIGHWAY_RISK, HIGHWAY_RISK_DEFAULT,
-    CATEGORIA_SEGURA, CATEGORIA_MODERADA
+    REPORT_INFLUENCE_RADIUS_M, REPORT_HALF_LIFE_DAYS, REPORT_MAX_AGE_DAYS,
+    REPORT_SATURATION, REPORT_TYPE_WEIGHTS, REPORT_TYPE_WEIGHT_DEFAULT,
+    REPORT_SEVERITY_FACTOR, REPORT_SEVERITY_FACTOR_DEFAULT,
 )
+
+logger = logging.getLogger(__name__)
+
+# Radio de influencia (metros) por tipo de POI para el context_score
+POI_RADII_M = {
+    "surveillance_camera": 150,
+    "bank": 150,
+    "street_lamp": 50,
+    "shop": 100,
+    "restaurant": 100,
+    "pharmacy": 100,
+    "fuel": 100,
+    "marketplace": 100,
+}
+COMMERCE_POI_TYPES = ("shop", "restaurant", "pharmacy", "fuel", "marketplace")
 
 
 class ScoreCalculatorService:
@@ -25,7 +42,7 @@ class ScoreCalculatorService:
 
     def calculate_all_scores(self) -> int:
         logger.info("Cargando segmentos de la BD")
-        df = self._cargar_segmentos()
+        df = self._load_segments()
 
         if df.empty:
             logger.warning("No hay segmentos en la BD")
@@ -35,27 +52,35 @@ class ScoreCalculatorService:
 
         # --- Capa 1: score distrital ---
         logger.info("Calculando district_score")
-        df = self._agregar_district_score(df)
+        df = self._add_district_score(df)
 
         # --- Capa 2: score de contexto urbano ---
         logger.info("Calculando context_score")
-        df = self._agregar_context_score(df)
+        df = self._add_context_score(df)
+
+        # --- Capa 3: reportes ciudadanos validados ---
+        logger.info("Calculando report_score (reportes validados, ST_DWithin 150m)")
+        start = time.monotonic()
+        df = self._add_report_score(df)
+        logger.info(f"  listo en {time.monotonic() - start:.0f}s")
 
         # --- Fórmula compuesta ---
-        df["composite_score"] = (
-            WEIGHT_DISTRICT * df["district_score"]
-            + WEIGHT_CONTEXT  * df["context_score"]
-            + WEIGHT_REPORT   * 0.0
-        ).clip(0.0, 1.0).round(4)
+        base = (WEIGHT_DISTRICT * df["district_score"]+ WEIGHT_CONTEXT * df["context_score"])
+        df["composite_score"] = np.where(
+            df["report_score"] > 0,
+            (1 - WEIGHT_REPORT) * base + WEIGHT_REPORT * df["report_score"],
+            base,
+        )
+        df["composite_score"] = df["composite_score"].clip(0.0, 1.0).round(4)
 
         # --- Guardar en risk_scores ---
         logger.info("Guardando scores en la BD")
-        self._guardar_scores(df)
+        self._save_scores(df)
 
         logger.info(f"{len(df)} scores guardados")
         return len(df)
 
-    def _cargar_segmentos(self) -> pd.DataFrame:
+    def _load_segments(self) -> pd.DataFrame:
         """Trae id, tipo de vía, ubigeo y longitud de todos los segmentos."""
         sql = text("""
             SELECT id, highway_type, district_ubigeo, length_m
@@ -64,154 +89,176 @@ class ScoreCalculatorService:
         rows = self.db.execute(sql).fetchall()
         return pd.DataFrame(rows, columns=["id", "highway_type", "district_ubigeo", "length_m"])
 
-    def _agregar_district_score(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _add_district_score(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Hace un join con district_crime_stats para traer la tasa normalizada.
-        Si el segmento no tiene ubigeo o el distrito no tiene datos, usa SCORE_NEUTRO.
+        Si el segmento no tiene ubigeo o el distrito no tiene datos, usa NEUTRAL_SCORE.
         """
         query = text("SELECT district_ubigeo, weighted_crime_rate FROM district_crime_stats")
         rows = self.db.execute(query).fetchall()
         df_rates = pd.DataFrame(rows, columns=["district_ubigeo", "weighted_crime_rate"])
 
         df = df.merge(df_rates, on="district_ubigeo", how="left")
-        df["district_score"] = df["weighted_crime_rate"].fillna(SCORE_NEUTRO)
+        df["district_score"] = df["weighted_crime_rate"].fillna(NEUTRAL_SCORE)
         return df
 
-    def _agregar_context_score(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _add_context_score(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Calcula los factores y los combina con pesos redistribuidos. 
-        Si un factor no tiene datos (usa SCORE_NEUTRO), su peso se redistribuye
+        Calcula los factores y los combina con pesos redistribuidos.
+        Si un factor no tiene datos (usa NEUTRAL_SCORE), su peso se redistribuye.
         """
         # Tipo de vía
         df["r_road"] = df["highway_type"].map(HIGHWAY_RISK).fillna(HIGHWAY_RISK_DEFAULT)
         df["has_road"] = True
 
         # Presencia policial
-        logger.debug("Consultando distancias a comisarías")
-        df_police = self._query_distancia_policia()
+        logger.info("Consultando distancias a comisarías (ST_DWithin 700m)...")
+        start = time.monotonic()
+        df_police = self._query_police_distance()
+        logger.info(f"  listo en {time.monotonic() - start:.0f}s")
         df = df.merge(df_police, on="id", how="left")
-        df["dist_policia"] = df["dist_policia"].fillna(9999.0)
-        df["r_police"] = df["dist_policia"].apply(self._factor_policia)
-        df["has_police"] = df["dist_policia"] < 700  # Tiene dato si está dentro del radio
+        df["police_dist"] = df["police_dist"].fillna(9999.0)
+        df["r_police"] = df["police_dist"].apply(self._police_factor)
+        df["has_police"] = df["police_dist"] < 700  # Tiene dato si está dentro del radio
 
-        # Vigilancia - cámaras (radio 150m)
-        logger.debug("Contando cámaras de vigilancia cercanas")
-        df_cameras = self._query_contar_pois("surveillance_camera", 150)
-        df = df.merge(df_cameras, on="id", how="left")
-        df["count_cameras"] = df["count_cameras"].fillna(0)
-        df["has_cameras"] = df["count_cameras"] > 0
+        # Conteo de POIs por tipo en una sola query
+        logger.info("Contando POIs cercanos por tipo (una sola query espacial)...")
+        start = time.monotonic()
+        counts = self._query_all_poi_counts()
+        logger.info(f"  listo en {time.monotonic() - start:.0f}s")
 
-        # Vigilancia - bancos (también 150m, contribuyen a seguridad)
-        logger.debug("Contando bancos cercanos")
-        df_banks = self._query_contar_pois("bank", 150)
-        df = df.merge(df_banks, on="id", how="left", suffixes=("", "_bank"))
-        df["count_banks"] = df["count_cameras_bank"].fillna(0)
-        df["count_cameras"] = df["count_cameras"] + df["count_banks"]
-        df["r_cameras"] = (1 - ((df["count_cameras"] / 2).clip(0, 1)))
-        df.drop(columns=["count_banks", "count_cameras_bank"], inplace=True)
+        def poi_count(poi_type: str) -> pd.Series:
+            if poi_type in counts.columns:
+                return df["id"].map(counts[poi_type]).fillna(0)
+            return pd.Series(0.0, index=df.index)
 
-        # Iluminación - postes de luz (radio 50m)
-        logger.debug("Contando postes de luz cercanos")
-        df_lighting = self._query_contar_pois("street_lamp", 50)
-        df = df.merge(df_lighting, on="id", how="left", suffixes=("", "_light"))
-        df["count_lighting"] = df["count_cameras_light"].fillna(0)
-        # Densidad de iluminación: (1 - min(count/5, 1.0)) - normalizamos por 5 lámparas
-        df["r_lighting"] = (1 - (df["count_lighting"] / 5).clip(0, 1))
-        df["has_lighting"] = df["count_lighting"] > 0
-        df.drop(columns=["count_cameras_light"], inplace=True)
+        # Vigilancia: cámaras (150m) + bancos (150m) contribuyen a seguridad
+        camera_count = poi_count("surveillance_camera")
+        df["has_cameras"] = camera_count > 0
+        df["r_cameras"] = (1 - ((camera_count + poi_count("bank")) / 2).clip(0, 1))
 
-        # Comercio (radio 100m)
-        logger.debug("Contando POIs comerciales cercanos")
-        df_shops = self._query_contar_pois("shop", 100)
-        df = df.merge(df_shops, on="id", how="left", suffixes=("", "_shop"))
-        df["count_shops"] = df["count_cameras_shop"].fillna(0)
+        # Iluminación: postes de luz (50m), normalizamos por 5 lámparas
+        lighting_count = poi_count("street_lamp")
+        df["r_lighting"] = (1 - (lighting_count / 5).clip(0, 1))
+        df["has_lighting"] = lighting_count > 0
 
-        df_restaurants = self._query_contar_pois("restaurant", 100)
-        df = df.merge(df_restaurants, on="id", how="left", suffixes=("", "_rest"))
-        df["count_restaurants"] = df["count_cameras_rest"].fillna(0)
+        # Comercio (100m): esperamos ~10 POIs de actividad comercial
+        commerce_count = sum(poi_count(t) for t in COMMERCE_POI_TYPES)
+        df["r_commerce"] = (1 - (commerce_count / 10).clip(0, 1))
+        df["has_commerce"] = commerce_count > 0
 
-        df_pharmacy = self._query_contar_pois("pharmacy", 100)
-        df = df.merge(df_pharmacy, on="id", how="left", suffixes=("", "_pharm"))
-        df["count_pharmacy"] = df["count_cameras_pharm"].fillna(0)
-
-        df_fuel = self._query_contar_pois("fuel", 100)
-        df = df.merge(df_fuel, on="id", how="left", suffixes=("", "_fuel"))
-        df["count_fuel"] = df["count_cameras_fuel"].fillna(0)
-
-        df_market = self._query_contar_pois("marketplace", 100)
-        df = df.merge(df_market, on="id", how="left", suffixes=("", "_market"))
-        df["count_market"] = df["count_cameras_market"].fillna(0)
-
-        # Total de POIs comerciales
-        df["count_commerce"] = (
-            df["count_shops"] + df["count_restaurants"] +
-            df["count_pharmacy"] + df["count_fuel"] + df["count_market"]
-        )
-
-        # Normalización: min(count/10, 1.0) - esperamos ~10 POIs de actividad comercial
-        df["r_commerce"] = (1 - (df["count_commerce"] / 10).clip(0, 1))
-        df["has_commerce"] = df["count_commerce"] > 0
-
-        # Limpiar columnas temporales
-        df.drop(columns=[
-            "count_cameras_shop", "count_shops",
-            "count_cameras_rest", "count_restaurants",
-            "count_cameras_pharm", "count_pharmacy",
-            "count_cameras_fuel", "count_fuel",
-            "count_cameras_market", "count_market",
-            "count_commerce", "count_cameras"
-        ], inplace=True)
-
-        # --- Calcular pesos redistribuidos  ---s
-        def calcular_context_score_fila(fila):
-            factores = [
-                ("lighting", fila["r_lighting"], CONTEXT_WEIGHT_LIGHTING, fila["has_lighting"]),
-                ("police", fila["r_police"], CONTEXT_WEIGHT_POLICE, fila["has_police"]),
-                ("road", fila["r_road"], CONTEXT_WEIGHT_ROAD_TYPE, fila["has_road"]),
-                ("cameras", fila["r_cameras"], CONTEXT_WEIGHT_CAMERAS, fila["has_cameras"]),
-                ("commerce", fila["r_commerce"], CONTEXT_WEIGHT_COMMERCE, fila["has_commerce"]),
+        # --- Combinar factores con pesos redistribuidos ---
+        def compute_row_context_score(row):
+            factors = [
+                ("lighting", row["r_lighting"], CONTEXT_WEIGHT_LIGHTING, row["has_lighting"]),
+                ("police", row["r_police"], CONTEXT_WEIGHT_POLICE, row["has_police"]),
+                ("road", row["r_road"], CONTEXT_WEIGHT_ROAD_TYPE, row["has_road"]),
+                ("cameras", row["r_cameras"], CONTEXT_WEIGHT_CAMERAS, row["has_cameras"]),
+                ("commerce", row["r_commerce"], CONTEXT_WEIGHT_COMMERCE, row["has_commerce"]),
             ]
 
             # Suma de pesos para factores con datos
-            peso_total_activos = sum(peso for _, _, peso, tiene_dato in factores if tiene_dato)
+            active_weight = sum(weight for _, _, weight, has_data in factors if has_data)
 
-            # Si no hay factores con datos, devolver SCORE_NEUTRO
-            if peso_total_activos == 0:
-                return SCORE_NEUTRO
+            # Si no hay factores con datos, devolver NEUTRAL_SCORE
+            if active_weight == 0:
+                return NEUTRAL_SCORE
 
             # Sumar valor × peso redistribuido
-            score = 0.0
-            for nombre, valor, peso_original, tiene_dato in factores:
-                if tiene_dato:
-                    peso_redistribuido = peso_original / peso_total_activos
-                    score += valor * peso_redistribuido
+            return sum(
+                value * (weight / active_weight)
+                for _, value, weight, has_data in factors
+                if has_data
+            )
 
-            return score
-
-        df["context_score"] = df.apply(calcular_context_score_fila, axis=1).clip(0.0, 1.0).round(4)
+        df["context_score"] = df.apply(compute_row_context_score, axis=1).clip(0.0, 1.0).round(4)
 
         # Limpiar columnas temporales
         df.drop(columns=["has_lighting", "has_police", "has_road", "has_cameras", "has_commerce"], inplace=True)
 
         return df
 
-    def _factor_policia(self, distancia_m: float) -> float:
+    def _add_report_score(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Reportes ciudadanos con status='validated' dentro de
+        REPORT_INFLUENCE_RADIUS_M de cada segmento. Cada reporte aporta
+        min(peso_tipo * factor_severidad, 1.0) * 0.5^(edad_días/vida_media),
+        la suma se normaliza por REPORT_SATURATION y se capea a 1.0.
+        """
+        now = datetime.utcnow()
+        cutoff = now - timedelta(days=REPORT_MAX_AGE_DAYS)
+
+        sql = text("""
+            SELECT
+                s.id AS segment_id,
+                r.incident_type,
+                r.severity_level,
+                COALESCE(r.occurred_at, r.created_at) AS created_at
+            FROM street_segments s
+            JOIN incident_reports r
+                ON r.status = 'validated'
+                AND COALESCE(r.occurred_at, r.created_at) >= :cutoff
+                AND ST_DWithin(
+                    s.geometry::geography,
+                    r.location::geography,
+                    :radius
+                )
+        """)
+        rows = self.db.execute(
+            sql, {"cutoff": cutoff, "radius": REPORT_INFLUENCE_RADIUS_M}
+        ).fetchall()
+
+        if not rows:
+            df["report_score"] = 0.0
+            return df
+
+        df_reports = pd.DataFrame(
+            rows, columns=["segment_id", "incident_type", "severity_level", "created_at"]
+        )
+
+        type_weight = df_reports["incident_type"].map(REPORT_TYPE_WEIGHTS).fillna(
+            REPORT_TYPE_WEIGHT_DEFAULT
+        )
+        severity_factor = df_reports["severity_level"].map(REPORT_SEVERITY_FACTOR).fillna(
+            REPORT_SEVERITY_FACTOR_DEFAULT
+        )
+        age_days = (now - pd.to_datetime(df_reports["created_at"])).dt.total_seconds() / 86400.0
+        decay = np.power(0.5, age_days / REPORT_HALF_LIFE_DAYS)
+
+        df_reports["contribution"] = (type_weight * severity_factor).clip(upper=1.0) * decay
+
+        per_segment = (
+            df_reports.groupby("segment_id")["contribution"].sum() / REPORT_SATURATION
+        ).clip(upper=1.0).rename("report_score").reset_index()
+        per_segment.rename(columns={"segment_id": "id"}, inplace=True)
+
+        df = df.merge(per_segment, on="id", how="left")
+        df["report_score"] = df["report_score"].fillna(0.0).round(4)
+
+        logger.info(
+            f"{len(per_segment)} segmentos afectados por "
+            f"{df_reports[['incident_type', 'created_at']].drop_duplicates().shape[0]} "
+            f"reportes validados ({len(df_reports)} pares segmento-reporte)"
+        )
+        return df
+
+    def _police_factor(self, distance_m: float) -> float:
         """Convierte distancia a comisaría en riesgo (SAF-16, factor 2)."""
-        if distancia_m <= 300:
+        if distance_m <= 300:
             return 0.0   # p_police = 1.0 -> r = 0
-        elif distancia_m <= 600:
+        elif distance_m <= 600:
             return 0.5   # p_police = 0.5 -> r = 0.5
         else:
             return 1.0   # p_police = 0.0 -> r = 1.0
 
-    def _query_distancia_policia(self) -> pd.DataFrame:
+    def _query_police_distance(self) -> pd.DataFrame:
         sql = text("""
             SELECT
                 s.id,
                 MIN(ST_Distance(
                     s.geometry::geography,
                     p.geometry::geography
-                )) AS dist_policia
+                )) AS police_dist
             FROM street_segments s
             LEFT JOIN urban_pois p
                 ON p.poi_type = 'police_station'
@@ -223,50 +270,64 @@ class ScoreCalculatorService:
             GROUP BY s.id
         """)
         rows = self.db.execute(sql).fetchall()
-        return pd.DataFrame(rows, columns=["id", "dist_policia"])
+        return pd.DataFrame(rows, columns=["id", "police_dist"])
 
-    def _query_contar_pois(self, poi_type: str, radio_m: int) -> pd.DataFrame:
-        sql = text("""
+    def _query_all_poi_counts(self) -> pd.DataFrame:
+        """
+        Cuenta POIs cercanos a cada segmento, por tipo, en una sola pasada
+        espacial (antes eran 8 queries separadas). El radio depende del tipo
+        (POI_RADII_M). Devuelve un DataFrame pivotado: índice = segment id,
+        una columna por poi_type; los segmentos sin POIs cercanos no aparecen
+        (el caller asume 0).
+        """
+        radius_case = " ".join(
+            f"WHEN '{poi_type}' THEN {radius}"
+            for poi_type, radius in POI_RADII_M.items()
+        )
+        sql = text(f"""
             SELECT
                 s.id,
-                COUNT(p.id) AS count_cameras
+                p.poi_type,
+                COUNT(p.id) AS poi_count
             FROM street_segments s
-            LEFT JOIN urban_pois p
-                ON p.poi_type = :poi_type
+            JOIN urban_pois p
+                ON p.poi_type IN :poi_types
                 AND ST_DWithin(
                     s.geometry::geography,
                     p.geometry::geography,
-                    :radio
+                    CASE p.poi_type {radius_case} END
                 )
-            GROUP BY s.id
-        """)
-        rows = self.db.execute(sql, {"poi_type": poi_type, "radio": radio_m}).fetchall()
-        return pd.DataFrame(rows, columns=["id", "count_cameras"])
+            GROUP BY s.id, p.poi_type
+        """).bindparams(bindparam("poi_types", expanding=True))
+        rows = self.db.execute(
+            sql, {"poi_types": list(POI_RADII_M.keys())}
+        ).fetchall()
 
-    def _guardar_scores(self, df: pd.DataFrame):
+        df = pd.DataFrame(rows, columns=["id", "poi_type", "poi_count"])
+        if df.empty:
+            return df
+        return df.pivot(index="id", columns="poi_type", values="poi_count").fillna(0)
+
+    def _save_scores(self, df: pd.DataFrame):
+        start = time.monotonic()
         self.db.query(RiskScore).delete()
 
-        ahora = datetime.utcnow()
-        scores_data = [
-            {
-                "segment_id": int(row["id"]),
-                "district_score": float(row["district_score"]),
-                "context_score": float(row["context_score"]),
-                "report_score": 0.0,
-                "composite_score": float(row["composite_score"]),
-                "last_updated": ahora,
-            }
-            for _, row in df.iterrows()
-        ]
+        out = df[["id", "district_score", "context_score", "report_score", "composite_score"]].rename(
+            columns={"id": "segment_id"}
+        )
+        out = out.astype({
+            "segment_id": int,
+            "district_score": float,
+            "context_score": float,
+            "report_score": float,
+            "composite_score": float,
+        })
+        out["last_updated"] = datetime.utcnow()
+        scores_data = out.to_dict("records")
 
         self.db.bulk_insert_mappings(RiskScore, scores_data)
         self.db.commit()
-        logger.info(f"Insertados {len(scores_data)} scores vía bulk_insert")
-
-    def get_categoria(self, security_score: int) -> str:
-        if security_score >= CATEGORIA_SEGURA:
-            return "Segura"
-        elif security_score >= CATEGORIA_MODERADA:
-            return "Moderada"
-        else:
-            return "Riesgosa"
+        logger.info(
+            f"Insertados {len(scores_data)} scores vía bulk_insert "
+            f"({time.monotonic() - start:.0f}s)"
+        )

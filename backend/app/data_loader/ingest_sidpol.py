@@ -45,7 +45,7 @@ def run_sidpol_ingestion():
             summary_df = repo.parse_source(file_path)
             logger.info(f"{len(summary_df)} registros procesados")
 
-            logger.info("Guardando en crimen_raw_data")
+            logger.info("Guardando en crime_raw_data")
             repo.save_rates(summary_df)
 
             logger.info("Calculando tasas normalizadas")

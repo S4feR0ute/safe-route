@@ -1,8 +1,8 @@
 import logging
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from app.schemas.geocode_schemas import GeocodeResponse, GeocodeResult
-from app.services.nominatim_service import NominatimService
+from app.core.service_container import ServiceContainer, get_service_container
 from app.core.error_handler import ErrorHandler
 
 logger = logging.getLogger(__name__)
@@ -10,7 +10,10 @@ router = APIRouter(prefix="/api/v1", tags=["geocoding"])
 
 
 @router.get("/geocode", response_model=GeocodeResponse)
-def geocodificar(q: str):
+def geocode(
+    q: str,
+    container: ServiceContainer = Depends(get_service_container),
+):
     """
     Geocodificación de direcciones contra Nominatim (OpenStreetMap).
     """
@@ -21,13 +24,9 @@ def geocodificar(q: str):
         )
 
     try:
-        service = NominatimService()
-        raw_results = service.buscar(q)
+        raw_results = container.get_nominatim_service().search(q)
 
-        if not raw_results:
-            return GeocodeResponse(results=[], total=0)
-
-        resultados = [
+        results = [
             GeocodeResult(
                 display_name=r["display_name"],
                 lat=r["lat"],
@@ -35,8 +34,7 @@ def geocodificar(q: str):
             )
             for r in raw_results
         ]
-
-        return GeocodeResponse(results=resultados, total=len(resultados))
+        return GeocodeResponse(results=results, total=len(results))
 
     except (TimeoutError, ConnectionError) as e:
         logger.warning(f"Nominatim service unavailable: {e}")

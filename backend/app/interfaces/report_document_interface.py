@@ -17,6 +17,8 @@ class IReportDocumentRepository(ABC):
         file_type: str,
         file_size_bytes: int,
         original_filename: Optional[str] = None,
+        description: Optional[str] = None,
+        storage_type: str = "local",
     ):
         """Crea un nuevo documento adjunto."""
         pass
@@ -32,7 +34,7 @@ class IReportDocumentRepository(ABC):
         pass
 
     @abstractmethod
-    def hash_exists(self, file_hash_sha256: str) -> bool:
+    def hash_already_exists(self, file_hash_sha256: str, exclude_report_id: Optional[str] = None) -> bool:
         """Verifica si un documento con este hash ya existe (previene duplicados)."""
         pass
 

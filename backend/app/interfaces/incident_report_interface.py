@@ -1,12 +1,22 @@
 from abc import ABC, abstractmethod
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 
 class IIncidentReportRepository(ABC):
     """Interfaz para repositories de reportes de incidencias"""
 
     @abstractmethod
-    def create(self, incident_type: str, location_wkt: str, mode: int, user_id: Optional[int] = None, description: Optional[str] = None):
+    def create(
+        self,
+        incident_type: str,
+        location_wkt: str,
+        latitude: float,
+        longitude: float,
+        mode: int,
+        user_id: Optional[int] = None,
+        description: Optional[str] = None,
+        occurred_at=None,
+    ):
         """Crea un nuevo reporte."""
         pass
 
@@ -26,8 +36,34 @@ class IIncidentReportRepository(ABC):
         pass
 
     @abstractmethod
+    def get_pending_paginated(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        incident_type: Optional[str] = None,
+    ) -> Tuple[List, int]:
+        """Obtiene reportes pendientes paginados para moderación: (reportes, total)."""
+        pass
+
+    @abstractmethod
+    def count_by_status(self) -> dict:
+        """Cuenta reportes agrupados por estado (para stats de moderación)."""
+        pass
+
+    @abstractmethod
     def get_validated_reports(self, limit: int = 100) -> List:
         """Obtiene reportes validados."""
+        pass
+
+    @abstractmethod
+    def get_validated_for_map(
+        self,
+        incident_type: Optional[str] = None,
+        bbox: Optional[tuple] = None,
+        limit: int = 200,
+        offset: int = 0,
+    ) -> Tuple[List, int]:
+        """Obtiene reportes validados para el mapa público: (reportes, total)."""
         pass
 
     @abstractmethod
@@ -38,6 +74,11 @@ class IIncidentReportRepository(ABC):
     @abstractmethod
     def update_report_status(self, report_id: str, status: str, validated_by_user_id: Optional[int] = None):
         """Actualiza estado de reporte."""
+        pass
+
+    @abstractmethod
+    def update_documents_metadata(self, report_id: str, document_count: int, evidence_quality_score: float = 0.0):
+        """Actualiza metadatos de documentos tras cargar/eliminar archivos."""
         pass
 
     @abstractmethod

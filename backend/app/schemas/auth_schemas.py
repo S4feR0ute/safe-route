@@ -47,8 +47,7 @@ class UserResponse(BaseModel):
     is_active: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class AuthTokenResponse(BaseModel):
@@ -56,20 +55,3 @@ class AuthTokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
-
-
-class AuthErrorResponse(BaseModel):
-    """Response de error de auth."""
-    error: dict = Field(..., description="Error details")
-
-    model_config = {
-        "json_schema_extra": {
-            "example": {
-                "error": {
-                    "code": "INVALID_CREDENTIALS",
-                    "message": "Email o contraseña incorrectos",
-                    "details": {}
-                }
-            }
-        }
-    }
