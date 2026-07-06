@@ -1,3 +1,5 @@
+import logging
+
 from sqlalchemy.orm import Session
 from app.models.crime_raw import CrimeRawData
 from app.models.crime_stats import DistrictCrimeStats
@@ -6,21 +8,24 @@ from app.core.constants import CRIME_WEIGHTS_MAP
 import pandas as pd
 import numpy as np
 
+logger = logging.getLogger(__name__)
+
+
 class CrimeAnalyticsService:
     def __init__(self, db: Session):
         self.db = db
 
-    def _cargar_pesos(self) -> dict:
+    def _load_weights(self) -> dict:
         """Carga los pesos desde la tabla crime_types_weights"""
         rows = self.db.query(CrimeTypeWeight).all()
 
         if not rows:
-            print("  Advertencia: crime_types_weights vacía, usando pesos del constants.py")
+            logger.warning("crime_types_weights vacía, usando pesos del constants.py")
             return CRIME_WEIGHTS_MAP
 
-        pesos = {row.subtype_name: row.danger_weight for row in rows}
-        print(f"  Pesos cargados desde la BD: {len(pesos)} tipos de delito")
-        return pesos
+        weights = {row.subtype_name: row.danger_weight for row in rows}
+        logger.info(f"Pesos cargados desde la BD: {len(weights)} tipos de delito")
+        return weights
 
     def process_crime_metrics(self):
         """
@@ -28,14 +33,14 @@ class CrimeAnalyticsService:
         Transforma datos históricos en índices de seguridad para el ruteo.
         """
         # 1. Cargar pesos desde la BD
-        weights_map = self._cargar_pesos()
+        weights_map = self._load_weights()
 
         # 2. Extracción de datos crudos
         query = self.db.query(CrimeRawData)
         df_raw = pd.read_sql(query.statement, self.db.bind)
 
         if df_raw.empty:
-            print("Advertencia: No se encontraron datos en crime_raw_data para procesar.")
+            logger.warning("No se encontraron datos en crime_raw_data para procesar.")
             return
 
         df_raw['is_violent'] = df_raw['crime_type'].isin(weights_map.keys())
@@ -64,8 +69,8 @@ class CrimeAnalyticsService:
 
         # 5. Persistencia de métricas condensadas
         self.update_stats_table(stats)
-        
-        print(f"Éxito: Índices de seguridad generados para {len(stats)} distritos.")
+
+        logger.info(f"Índices de seguridad generados para {len(stats)} distritos.")
 
     def update_stats_table(self, stats_df):
         """Limpia y actualiza la tabla de estadísticas procesadas."""

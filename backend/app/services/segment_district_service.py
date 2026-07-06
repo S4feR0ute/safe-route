@@ -1,5 +1,9 @@
+import logging
+
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+
+logger = logging.getLogger(__name__)
 
 
 class SegmentDistrictService:
@@ -10,16 +14,16 @@ class SegmentDistrictService:
         self.db = db
 
     def assign_districts_to_segments(self) -> int:
-        print("Asignando distritos a segmentos via ST_Within...")
+        logger.info("Asignando distritos a segmentos via ST_Within...")
 
-        count_sin_distrito = self.db.execute(
+        missing_count = self.db.execute(
             text("SELECT COUNT(*) FROM street_segments WHERE district_ubigeo IS NULL")
         ).scalar()
 
-        print(f"  Segmentos sin distrito: {count_sin_distrito}")
+        logger.info(f"Segmentos sin distrito: {missing_count}")
 
-        if count_sin_distrito == 0:
-            print("  -> Todos los segmentos ya tienen distrito asignado.")
+        if missing_count == 0:
+            logger.info("Todos los segmentos ya tienen distrito asignado.")
             return 0
 
         update_query = text("""
@@ -37,19 +41,21 @@ class SegmentDistrictService:
         self.db.commit()
 
         updated = result.rowcount
-        print(f"  -> {updated} segmentos actualizados con su distrito")
+        logger.info(f"{updated} segmentos actualizados con su distrito")
 
-        sin_asignar = self.db.execute(
+        unassigned = self.db.execute(
             text("SELECT COUNT(*) FROM street_segments WHERE district_ubigeo IS NULL")
         ).scalar()
 
-        if sin_asignar > 0:
-            print(f"  Advertencia: {sin_asignar} segmentos siguen sin distrito")
-            print("  (probablemente están en los bordes o fuera de los polígonos)")
+        if unassigned > 0:
+            logger.warning(
+                f"{unassigned} segmentos siguen sin distrito "
+                "(probablemente en los bordes o fuera de los polígonos)"
+            )
 
         return updated
 
-    def get_resumen(self) -> list:
+    def get_summary(self) -> list:
         query = text("""
             SELECT d.name, d.ubigeo, COUNT(seg.id) AS total_segmentos
             FROM districts d
