@@ -61,25 +61,39 @@ const FitRoute = ({ routeData }) => {
   return null;
 };
 
-const MapView = ({ origen, destino, onSelectPoint, routeData }) => {
+const MapView = ({ origen, destino, onSelectPoint, routeData, reports = [], showReports = true }) => {
   const limaPosition = [-12.0464, -77.0428];
 
-  const origenIcon = new L.Icon({
-    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-green.png',
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
-    shadowSize: [41, 41],
+  const origenIcon = L.divIcon({
+    html: '<div style="font-size: 32px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); margin-top:-10px;">📍</div>',
+    className: 'custom-emoji-icon',
+    iconSize: [30, 30],
+    iconAnchor: [15, 20],
+    popupAnchor: [0, -20],
   });
 
-  const destinoIcon = new L.Icon({
-    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-red.png',
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
-    shadowSize: [41, 41],
+  const destinoIcon = L.divIcon({
+    html: '<div style="font-size: 32px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); margin-top:-10px;">📍</div>',
+    className: 'custom-emoji-icon',
+    iconSize: [30, 30],
+    iconAnchor: [15, 20],
+    popupAnchor: [0, -20],
+  });
+
+  const reportVerifiedIcon = L.divIcon({
+    html: '<div style="font-size: 28px; text-shadow: 2px 2px 4px rgba(0,0,0,0.6); margin-top:-10px;">🚨</div>',
+    className: 'custom-emoji-icon',
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
+    popupAnchor: [0, -15],
+  });
+
+  const reportPendingIcon = new L.divIcon({
+    html: '<div style="font-size: 28px; text-shadow: 2px 2px 4px rgba(0,0,0,0.6); margin-top:-10px;">⚠️</div>',
+    className: 'custom-emoji-icon',
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
+    popupAnchor: [0, -15],
   });
 
   return (
@@ -95,6 +109,29 @@ const MapView = ({ origen, destino, onSelectPoint, routeData }) => {
       
       <MapClickHandler onSelectPoint={onSelectPoint} origen={origen} destino={destino} />
       
+      {showReports && reports.map((report) => {
+        if (!report.latitude || !report.longitude) return null;
+        
+        const isVerified = report.status === 'validated';
+        const position = [report.latitude, report.longitude];
+
+        return (
+          <Marker 
+            key={report.id} 
+            position={position} 
+            icon={isVerified ? reportVerifiedIcon : reportPendingIcon}
+          >
+            <Popup>
+              <strong>{isVerified ? '🚨' : '⚠️'} {report.incident_type}</strong><br/>
+              <span style={{ fontSize: '11px', color: '#666' }}>
+                Estado: {isVerified ? '✅ Verificado' : '⏳ Pendiente'}
+              </span>
+              {report.description && <p style={{ margin: '5px 0' }}>{report.description}</p>}
+            </Popup>
+          </Marker>
+        );
+      })}
+
       {origen && (
         <Marker position={origen} icon={origenIcon}>
           <Popup>Origen</Popup>

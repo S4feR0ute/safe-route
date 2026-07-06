@@ -17,12 +17,19 @@ export const login = async (email, password) => {
     const errorData = await response.json();
     
     // detector de errores
-    if (errorData.error && errorData.error.details && errorData.error.details.errors.length > 0) {
+    if (errorData?.error?.details?.errors?.length > 0) {
       const mainError = errorData.error.details.errors[0];
       throw new Error(`Rechazado -> ${mainError.field}: ${mainError.message}`);
     }
+    if (errorData?.error?.message) {
+      throw new Error(`Rechazado: ${errorData.error.message}`);
+    }
+    if (Array.isArray(errorData?.detail) && errorData.detail.length > 0) {
+        const mainError = errorData.detail[0];
+        throw new Error(`Rechazado -> Campo ${mainError.loc.join(' > ')}: ${mainError.msg}`);
+    }
     
-    throw new Error(errorData.detail || 'Credenciales incorrectas');
+    throw new Error(errorData?.detail || 'Credenciales incorrectas');
   }
 
   const data = await response.json();
@@ -48,12 +55,19 @@ export const registerUser = async (email, password, displayName) => {
     const errorData = await response.json();
     
     // Leemos el formato de error
-    if (errorData.error && errorData.error.details && errorData.error.details.errors.length > 0) {
+    if (errorData?.error?.details?.errors?.length > 0) {
       const mainError = errorData.error.details.errors[0];
       throw new Error(`Rechazado -> ${mainError.field}: ${mainError.message}`);
     }
+    if (errorData?.error?.message) {
+      throw new Error(`Rechazado: ${errorData.error.message}`);
+    }
+    if (Array.isArray(errorData?.detail) && errorData.detail.length > 0) {
+        const mainError = errorData.detail[0];
+        throw new Error(`Rechazado -> Campo ${mainError.loc.join(' > ')}: ${mainError.msg}`);
+    }
     
-    throw new Error(errorData.detail || 'Error al registrar el usuario');
+    throw new Error(errorData?.detail || 'Error al registrar el usuario');
   }
 
   return response.json();
