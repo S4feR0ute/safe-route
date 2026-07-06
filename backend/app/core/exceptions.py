@@ -47,6 +47,21 @@ class InvalidCredentialsError(ServiceError):
     pass
 
 
+class ReportNotFoundError(ServiceError, ValueError):
+    """El reporte no existe."""
+    pass
+
+
+class InvalidReportStateError(ServiceError, ValueError):
+    """El reporte no está en el estado requerido para la operación."""
+    pass
+
+
+class DuplicateFileError(ServiceError):
+    """Ya existe un documento con el mismo contenido (hash SHA-256)."""
+    pass
+
+
 def error_response(code: str, message: str, status_code: int, details: Optional[dict] = None) -> JSONResponse:
     """Factory para crear respuestas de error consistentes."""
     return JSONResponse(
