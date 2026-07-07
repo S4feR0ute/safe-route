@@ -2,6 +2,7 @@ import osmnx as ox
 import networkx as nx
 from sqlalchemy.orm import Session
 from geoalchemy2.shape import to_shape
+from app.core.constants import GEOCODE_QUERY_OVERRIDES
 from app.interfaces.street_graph_interface import IStreetGraphDAO
 from app.models.street_network import StreetNode, StreetSegment
 from app.utils.osm_helpers import (
@@ -36,7 +37,14 @@ class OSMnxStreetGraphDAO(IStreetGraphDAO):
         Descarga el grafo peatonal desde OSM (place_name puede ser un lugar "Miraflores, Lima, Peru")."""
         label = place_name if isinstance(place_name, str) else f"{len(place_name)} lugares (unión)"
         print(f"Extrayendo grafo de OSM para: {label}...")
-        graph = ox.graph_from_place(place_name, network_type=self.network_type)
+
+        # Algunos nombres son ambiguos en texto libre para Nominatim; en esos casos se usa una query estructurada.
+        if isinstance(place_name, list):
+            query = [GEOCODE_QUERY_OVERRIDES.get(p, p) for p in place_name]
+        else:
+            query = GEOCODE_QUERY_OVERRIDES.get(place_name, place_name)
+
+        graph = ox.graph_from_place(query, network_type=self.network_type)
         print(f"  -> {graph.number_of_nodes()} nodos, {graph.number_of_edges()} aristas")
         return graph
 

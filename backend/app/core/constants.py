@@ -131,6 +131,24 @@ UBIGEO_MAP = {
     "Ventanilla, Callao, Peru":                 "070106",
 }
 
+# Nominatim resuelve mal estos nombres en texto libre: "Callao District, Callao, Peru"
+# matchea primero el boundary de la provincia/región, y "Lima District, Lima, Peru"
+# matchea un lugar homónimo equivocado cerca de Tumbes (a ~1000km de Lima). Ambos
+# se corrigen con una query estructurada (city/state/country) que sí resuelve al
+# distrito correcto.
+GEOCODE_QUERY_OVERRIDES = {
+    "Callao District, Callao, Peru": {
+        "city": "Callao",
+        "state": "Lima Metropolitana",
+        "country": "Peru",
+    },
+    "Lima District, Lima, Peru": {
+        "city": "Lima",
+        "state": "Lima Metropolitana",
+        "country": "Peru",
+    },
+}
+
 # Pesos del score compuesto
 # Capas 1 y 2 forman el score base:
 #   base = WEIGHT_DISTRICT * district_score + WEIGHT_CONTEXT * context_score

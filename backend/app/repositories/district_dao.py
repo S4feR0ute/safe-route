@@ -2,6 +2,7 @@ import logging
 import osmnx as ox
 from sqlalchemy.orm import Session
 from geoalchemy2.elements import WKTElement
+from app.core.constants import GEOCODE_QUERY_OVERRIDES
 from app.interfaces.district_interface import IDistrictDAO
 from app.models.district import District
 from app.utils.osm_helpers import setup_osmnx
@@ -19,8 +20,11 @@ class OSMnxDistrictDAO(IDistrictDAO):
     def extract_boundary(self, place_name: str, ubigeo: str) -> dict | None:
         logger.info(f"Extrayendo polígono de: {place_name}")
         try:
+            # Algunos nombres son ambiguos en texto libre para Nominatim; en esos casos se usa una query estructurada.
+            query = GEOCODE_QUERY_OVERRIDES.get(place_name, place_name)
+
             # ox.geocode_to_gdf devuelve un GeoDataFrame con el polígono del lugar
-            gdf = ox.geocode_to_gdf(place_name)
+            gdf = ox.geocode_to_gdf(query)
 
             if gdf.empty:
                 logger.warning(f"Sin resultado para {place_name}")
