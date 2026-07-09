@@ -80,10 +80,18 @@ def make_fake_container_moderation(report=None, excepcion=None):
 
 
 @pytest.fixture
+
 def client():
+    # Resetear rate limiter
+    try:
+        stack = app.middleware_stack
+        while hasattr(stack, 'app'):
+            if hasattr(stack, 'request_history'):
+                stack.request_history.clear()
+            stack = stack.app
+    except Exception:
+        pass
     return TestClient(app)
-
-
 # --- MODO 3: CREACION CON ARCHIVO ---
 
 def test_modo3_reporte_con_archivo_valido_retorna_201(client):

@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 
 from api_app import app
 from app.db.session import get_db
-from app.core.service_container import ServiceContainer
+from app.core.service_container import ServiceContainer, get_service_container
 from app.core.exceptions import EmptyGraphError, NoRouteError
 from app.services.routing_service import RoutingService
 
