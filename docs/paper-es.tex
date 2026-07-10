@@ -1,0 +1,69 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage[spanish]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{cite}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{url}
+
+\begin{document}
+
+\title{SafeRoute: Plataforma de ruteo peatonal optimizado por seguridad para ciudades del Perú}
+
+\author{
+\IEEEauthorblockN{Anngie Salazar Alvarez, Luis Alanya Campos, Pedro Vargas Alfaro, Jharvy Cadillo Tarazona}
+\IEEEauthorblockA{Facultad de Ingeniería, Universidad Nacional de Ingeniería\\
+Curso de Desarrollo de Software, 2026-I\\
+Lima, Perú}
+}
+
+\maketitle
+
+\begin{abstract}
+La inseguridad ciudadana es uno de los principales problemas de las ciudades del Perú, y las aplicaciones de navegación convencionales optimizan por distancia o tiempo, ignorando el riesgo. Este trabajo presenta SafeRoute, una plataforma web que calcula rutas peatonales minimizando la exposición a zonas inseguras. El sistema combina un modelo de riesgo de tres capas ---criminalidad distrital, contexto urbano de OpenStreetMap y reportes ciudadanos verificados--- sobre el grafo de calles, y aplica el algoritmo de Dijkstra ponderado por riesgo. Se implementó con una arquitectura de servicios desacoplados (FastAPI, PostgreSQL/PostGIS, React) y un esquema de pre-cálculo que garantiza respuestas menores a tres segundos. Se implementaron 16 de 19 requisitos funcionales, incluyendo cuentas de usuario, un módulo de reportes en tres modalidades y moderación de evidencia documental.
+\end{abstract}
+
+\begin{IEEEkeywords}
+ruteo seguro, ciudad inteligente, seguridad ciudadana, sistemas de información geográfica, Dijkstra, OpenStreetMap.
+\end{IEEEkeywords}
+
+\section{Introducción}
+Varias ciudades peruanas presentan altos índices de criminalidad. El peatón carece de herramientas que le permitan elegir rutas más seguras: aplicaciones como Google Maps o Waze optimizan por distancia y tiempo, no por riesgo. SafeRoute aborda este vacío calculando y visualizando rutas rankeadas por un índice de seguridad, con una ciudad de cobertura configurable; el despliegue de referencia utiliza Lima Metropolitana.
+
+\section{Contexto y fuentes de datos}
+Las fuentes oficiales (SIDPOL y el Observatorio del Ministerio del Interior) publican criminalidad agregada por distrito, sin coordenadas exactas ni granularidad temporal. Para compensar la falta de detalle a nivel de calle, SafeRoute añade dos capas: factores de contexto urbano extraídos de OpenStreetMap (comisarías, cámaras, iluminación, densidad de puntos de interés) y reportes ciudadanos verificados georreferenciados a nivel de punto.
+
+\section{Requisitos}
+El sistema fue especificado bajo el estándar ISO/IEC/IEEE 29148:2018. Entre los requisitos funcionales destacan: consultar y visualizar la ruta segura, geocodificación de direcciones, ingesta de datos, cálculo del score compuesto y ruteo, gestión de cuentas con JWT, reportes en tres modos, moderación e integración de reportes verificados al score. Al cierre del proyecto se implementaron 16 de 19 requisitos funcionales por completo; los tres parciales corresponden al cálculo programado, la comparación visual de rutas y la diferenciación de reportes en el mapa.
+
+\section{Arquitectura}
+SafeRoute emplea servicios desacoplados con la base de datos como único punto de integración: un servicio de ruteo, un servicio de reportes y un cargador de datos. El pre-cálculo desacopla la consulta de las fuentes externas: el cargador ingesta y calcula por lotes, y la API únicamente lee los scores ya almacenados. Cada servicio sigue una arquitectura en capas (API, servicios, repositorios/DAO tras interfaces y base de datos) sobre PostgreSQL con la extensión PostGIS.
+
+Se aplicaron patrones de diseño: Repository y DAO para el acceso a datos, Factory para la creación de repositorios, un contenedor de inyección de dependencias, Strategy para intercambiar fuentes de datos tras interfaces, Template Method para la ingesta y Facade en la capa de servicios, todo sustentado en los principios SOLID.
+
+\section{Implementación}
+El score compuesto por segmento combina tres capas ponderadas: criminalidad distrital, contexto urbano y reportes verificados. Estos últimos se asocian por proximidad mediante \texttt{ST\_DWithin}, con un peso según el tipo de incidencia y un decaimiento temporal. El ruteo ejecuta Dijkstra sobre un costo definido como
+\begin{equation}
+\text{costo}(e) = \text{longitud}(e) \cdot (1 + \alpha \cdot \text{riesgo}(e)),
+\end{equation}
+devolviendo la ruta más segura y la más corta con métricas comparativas. El módulo de reportes ofrece tres modos (anónimo, con cuenta y con documentos), con autenticación JWT, hashing de contraseñas, rate limiting, validación de archivos (tipo, tamaño y hash SHA-256) y un flujo de moderación por rol. El frontend, construido con React y Leaflet, renderiza rutas coloreadas por riesgo, el panel de score y los reportes como marcadores diferenciados.
+
+\section{Validación}
+El backend cuenta con pruebas unitarias del cálculo de scores y del ruteo con grafos sintéticos, pruebas de integración de los reportes y la moderación, y pruebas de extremo a extremo del frontend con Playwright. Se documentó el cumplimiento del OWASP Top 10. Gracias al pre-cálculo y a los índices espaciales GiST, la API de ruteo cumple el objetivo de responder en menos de tres segundos.
+
+\section{Conclusiones y trabajo futuro}
+SafeRoute demuestra que es viable un ruteo peatonal consciente del riesgo integrando datos abiertos y aportes ciudadanos, con presupuesto cero. Como trabajo futuro se plantea automatizar la ejecución programada del cargador de datos, mostrar en la interfaz la comparación entre la ruta segura y la corta, enriquecer la diferenciación de reportes en el mapa e incorporar, de publicarse, datos georreferenciados oficiales como capa adicional.
+
+\begin{thebibliography}{1}
+\bibitem{iso29148} ISO/IEC/IEEE 29148:2018, \emph{Systems and software engineering --- Requirements engineering}.
+\bibitem{sidpol} Plataforma Nacional de Datos Abiertos, \emph{SIDPOL --- Denuncias Policiales}.
+\bibitem{mininter} Observatorio Nacional de Seguridad Ciudadana, Ministerio del Interior del Perú.
+\bibitem{osm} OpenStreetMap y Overpass API. \url{https://www.openstreetmap.org}
+\bibitem{fielding} R. T. Fielding, ``Architectural Styles and the Design of Network-based Software Architectures,'' Cap. 5: REST, 2000.
+\bibitem{ley29733} Ley N.º 29733, \emph{Ley de Protección de Datos Personales del Perú}.
+\end{thebibliography}
+
+\end{document}
