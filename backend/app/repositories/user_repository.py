@@ -1,24 +1,19 @@
-from typing import Optional, List
+from typing import Optional
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from app.models.user import User
-from app.interfaces.user_interface import IUserRepository
 
 
-class UserRepository(IUserRepository):
+class UserRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_by_email(self, email: str) -> Optional[User]:
-        """Obtiene usuario por email (incluyendo eliminados)."""
-        return self.db.query(User).filter(User.email == email).first()
-
     def get_by_id(self, user_id: int) -> Optional[User]:
-        """Obtiene usuario por ID (incluyendo eliminados)."""
+        """Retorna un usuario por ID, incluyendo eliminados."""
         return self.db.query(User).filter(User.id == user_id).first()
 
     def get_active_user_by_email(self, email: str) -> Optional[User]:
-        """Obtiene usuario activo y no eliminado por email (para login)."""
+        """Retorna un usuario activo por email, ignorando eliminados."""
         return self.db.query(User).filter(
             User.email == email,
             User.is_active == True,
@@ -42,49 +37,6 @@ class UserRepository(IUserRepository):
         """Verifica si el email ya existe (incluyendo eliminados)."""
         return self.db.query(User).filter(User.email == email).first() is not None
 
-    def get_active_users(self, limit: int = 100) -> List[User]:
-        """Obtiene usuarios activos (no eliminados)."""
-        return self.db.query(User).filter(
-            User.is_active == True,
-            User.deleted_at == None
-        ).limit(limit).all()
-
-    def get_verified_moderators(self, limit: int = 100) -> List[User]:
-        """Obtiene moderadores verificados."""
-        return self.db.query(User).filter(
-            User.user_type.in_(["moderator", "admin"]),
-            User.is_verified_moderator == True,
-            User.is_active == True,
-            User.deleted_at == None
-        ).limit(limit).all()
-
-    def promote_to_moderator(self, user_id: int, moderator_role: str = "moderator") -> Optional[User]:
-        """Promueve un usuario a moderador."""
-        user = self.get_by_id(user_id)
-        if user and user.user_type == "citizen":
-            user.user_type = "moderator"
-            user.moderator_role = moderator_role
-            user.moderator_since = datetime.utcnow()
-            return user
-        return None
-
-    def verify_moderator(self, user_id: int) -> Optional[User]:
-        """Verifica un moderador después de proceso de validación."""
-        user = self.get_by_id(user_id)
-        if user and user.user_type in ["moderator", "admin"]:
-            user.is_verified_moderator = True
-            return user
-        return None
-
-    def deactivate(self, user_id: int) -> bool:
-        """Desactiva un usuario (soft delete)."""
-        user = self.get_by_id(user_id)
-        if user:
-            user.is_active = False
-            user.deleted_at = datetime.utcnow()
-            return True
-        return False
-
     def reset_login_attempts(self, user_id: int) -> Optional[User]:
         """Resetea intentos fallidos después de login exitoso."""
         user = self.get_by_id(user_id)
@@ -95,7 +47,7 @@ class UserRepository(IUserRepository):
         return None
 
     def increment_failed_login(self, user_id: int, max_attempts: int = 5) -> bool:
-        """Incrementa intentos fallidos de login. Si alcanza max_attempts, bloquea la cuenta"""
+        """Incrementa intentos fallidos y bloquea si excede max_attempts."""
         user = self.get_by_id(user_id)
         if user:
             user.failed_login_attempts += 1

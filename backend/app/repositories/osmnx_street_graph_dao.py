@@ -1,3 +1,4 @@
+import logging
 import osmnx as ox
 import networkx as nx
 from sqlalchemy.orm import Session
@@ -14,10 +15,10 @@ from app.utils.osm_helpers import (
     make_linestring_geometry,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class OSMnxStreetGraphDAO(IStreetGraphDAO):
-    """DAO para extraer y guardar el grafo de calles usando OSMnx."""
-
     def __init__(self, db: Session, network_type: str = "walk"):
         self.db = db
         self.network_type = network_type
@@ -33,19 +34,17 @@ class OSMnxStreetGraphDAO(IStreetGraphDAO):
     CHUNK_SIZE = 50_000
 
     def extract_graph(self, place_name) -> nx.MultiDiGraph:
-        """
-        Descarga el grafo peatonal desde OSM (place_name puede ser un lugar "Miraflores, Lima, Peru")."""
+        """Descarga el grafo peatonal desde OSM."""
         label = place_name if isinstance(place_name, str) else f"{len(place_name)} lugares (unión)"
-        print(f"Extrayendo grafo de OSM para: {label}...")
+        logger.info(f"Extrayendo grafo de OSM para: {label}...")
 
-        # Algunos nombres son ambiguos en texto libre para Nominatim; en esos casos se usa una query estructurada.
         if isinstance(place_name, list):
             query = [GEOCODE_QUERY_OVERRIDES.get(p, p) for p in place_name]
         else:
             query = GEOCODE_QUERY_OVERRIDES.get(place_name, place_name)
 
         graph = ox.graph_from_place(query, network_type=self.network_type)
-        print(f"  -> {graph.number_of_nodes()} nodos, {graph.number_of_edges()} aristas")
+        logger.info(f"  -> {graph.number_of_nodes()} nodos, {graph.number_of_edges()} aristas")
         return graph
 
     def save_graph(self, graph: nx.MultiDiGraph, place_name: str) -> int:
@@ -72,7 +71,7 @@ class OSMnxStreetGraphDAO(IStreetGraphDAO):
                 total_nodes += self._flush_chunk(buffer, total_nodes, "nodos")
 
         total_nodes += self._flush_chunk(buffer, total_nodes, "nodos")
-        print(f"  -> {total_nodes} nodos guardados")
+        logger.info(f"  -> {total_nodes} nodos guardados")
 
         total_segments = 0
         for u, v, _key, data in graph.edges(keys=True, data=True):
@@ -97,7 +96,7 @@ class OSMnxStreetGraphDAO(IStreetGraphDAO):
                 total_segments += self._flush_chunk(buffer, total_segments, "segmentos")
 
         total_segments += self._flush_chunk(buffer, total_segments, "segmentos")
-        print(f"  -> {total_segments} segmentos guardados para {place_name}")
+        logger.info(f"  -> {total_segments} segmentos guardados para {place_name}")
 
         self._node_ids_in_db = known_nodes
         return total_segments
@@ -111,11 +110,11 @@ class OSMnxStreetGraphDAO(IStreetGraphDAO):
         self.db.commit()
         self.db.expunge_all()  # libera los objetos ORM ya persistidos
         buffer.clear()
-        print(f"  ... {done + count} {label}")
+        logger.info(f"  ... {done + count} {label}")
         return count
 
     def load_graph(self) -> nx.MultiDiGraph:
-        print("Reconstruyendo el grafo NetworkX desde la base de datos...")
+        logger.info("Reconstruyendo el grafo NetworkX desde la base de datos...")
 
         graph = nx.MultiDiGraph()
         graph.graph["crs"] = "epsg:4326"
@@ -136,5 +135,5 @@ class OSMnxStreetGraphDAO(IStreetGraphDAO):
                 geometry=geometry,
             )
 
-        print(f"Grafo reconstruido: {graph.number_of_nodes()} nodos, {graph.number_of_edges()} calles.")
+        logger.info(f"Grafo reconstruido: {graph.number_of_nodes()} nodos, {graph.number_of_edges()} calles.")
         return graph

@@ -1,31 +1,33 @@
+import logging
 import osmnx as ox
 import geopandas as gpd
 from sqlalchemy.orm import Session
-from app.interfaces.urban_context_interface import IUrbanContextDAO
 from app.models.urban_context import UrbanPOI
 from app.utils.osm_helpers import setup_osmnx, normalize_tag_value, make_point_geometry
 
+logger = logging.getLogger(__name__)
 
-class OSMnxContextDAO(IUrbanContextDAO):
-    """DAO para extraer POIs de contexto urbano (comisarías, cámaras, etc.)."""
 
+class OSMnxContextDAO:
     def __init__(self, db: Session):
         self.db = db
         setup_osmnx()
 
     def extract_pois(self, place_name: str, tags: dict) -> gpd.GeoDataFrame:
-        print(f"Buscando POIs en {place_name} con tags {tags}...")
+        """Extrae POIs de OSM para un lugar dado y un conjunto de tags."""
+        logger.info(f"Buscando POIs en {place_name} con tags {tags}...")
         try:
             gdf = ox.features_from_place(place_name, tags=tags)
-            print(f"  -> {len(gdf)} resultados")
+            logger.info(f"  -> {len(gdf)} resultados")
             return gdf
         except Exception as error:
-            print(f"  -> Sin datos para {place_name}: {error}")
+            logger.warning(f"  -> Sin datos para {place_name}: {error}")
             return gpd.GeoDataFrame()
 
     def save_pois(self, gdf: gpd.GeoDataFrame, poi_type: str) -> int:
+        """Guarda POIs en la base de datos, evitando duplicados por OSM ID."""
         if gdf.empty:
-            print(f"  -> No hay {poi_type} para guardar")
+            logger.info(f"  -> No hay {poi_type} para guardar")
             return 0
 
         saved = 0
@@ -54,5 +56,5 @@ class OSMnxContextDAO(IUrbanContextDAO):
             saved += 1
 
         self.db.commit()
-        print(f"  -> {saved} POIs de tipo '{poi_type}' guardados")
+        logger.info(f"  -> {saved} POIs de tipo '{poi_type}' guardados")
         return saved
