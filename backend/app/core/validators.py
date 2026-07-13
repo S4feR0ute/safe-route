@@ -178,22 +178,3 @@ class InputValidator:
         max_val: int = None
     ) -> int:
         return IntegerValidator.validate(value, field_name, min_val, max_val)
-
-
-class SchemaValidators:
-    """Alias para field validators en Pydantic (@field_validator)."""
-
-    @staticmethod
-    def validate_email_field(value: str) -> str:
-        """@field_validator('email', mode='before')"""
-        return EmailValidator.validate(value)
-
-    @staticmethod
-    def validate_password_field(value: str) -> str:
-        """@field_validator('password', mode='before')"""
-        return PasswordValidator.validate(value)
-
-    @staticmethod
-    def validate_string_field(value: str, max_length: int = 255) -> str:
-        """@field_validator('name', mode='before')"""
-        return StringValidator.validate(value, max_length=max_length)
