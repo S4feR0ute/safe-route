@@ -1,3 +1,5 @@
+import functools
+import inspect
 import logging
 from contextlib import contextmanager
 from sqlalchemy.orm import Session
@@ -37,3 +39,22 @@ def transaction_no_close(db: Session):
         db.rollback()
         logger.error(f"Transacción revertida: {e}")
         raise
+
+
+def transactional(method):
+    """
+    Decorator para métodos de servicio: ejecuta el método dentro de una
+    transacción. Equivale a envolver el cuerpo en `with transaction_no_close(self.db)`.
+    """
+    if inspect.iscoroutinefunction(method):
+        @functools.wraps(method)
+        async def async_wrapper(self, *args, **kwargs):
+            with transaction_no_close(self.db):
+                return await method(self, *args, **kwargs)
+        return async_wrapper
+
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with transaction_no_close(self.db):
+            return method(self, *args, **kwargs)
+    return wrapper
