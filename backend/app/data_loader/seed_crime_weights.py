@@ -1,4 +1,5 @@
 import sys
+import logging
 from pathlib import Path
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
@@ -10,6 +11,8 @@ from app.db.transactions import transaction
 from app.models.crime_type_weight import CrimeTypeWeight
 from app.core.constants import CRIME_WEIGHTS_MAP, STREET_CRIMES
 
+logger = logging.getLogger(__name__)
+
 def run_seed_crime_weights():
     """
     Puebla la tabla crime_types_weights con los pesos definidos en CRIME_WEIGHTS_MAP.
@@ -17,7 +20,7 @@ def run_seed_crime_weights():
     db = SessionLocal()
 
     with transaction(db):
-        print("--- Seed: pesos por tipo de delito ---")
+        logger.info("--- Seed: pesos por tipo de delito ---")
 
         insertados = 0
         actualizados = 0
@@ -42,14 +45,18 @@ def run_seed_crime_weights():
                 db.add(nuevo)
                 insertados += 1
 
-        print(f"  -> {insertados} tipos insertados, {actualizados} actualizados")
-        print("\nPesos cargados:")
+        logger.info(f"  -> {insertados} tipos insertados, {actualizados} actualizados")
+        logger.info("\nPesos cargados:")
 
         todos = db.query(CrimeTypeWeight).order_by(CrimeTypeWeight.danger_weight.desc()).all()
         for entry in todos:
             calle = "callejero" if entry.is_street_crime else "interior"
-            print(f"  [{entry.danger_weight:.2f}] {entry.subtype_name} ({calle})")
+            logger.info(f"  [{entry.danger_weight:.2f}] {entry.subtype_name} ({calle})")
 
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+    )
     run_seed_crime_weights()

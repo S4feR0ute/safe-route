@@ -61,17 +61,13 @@ class DataLoaderOrchestrator:
             logger.info(f"  {i}. {slug} — {description}")
 
     def _run_steps(self, steps: List[str], title: str) -> bool:
-        logger.info("=" * 60)
         logger.info(title)
-        logger.info("=" * 60)
 
         by_slug = {slug: (description, func) for slug, description, func in self.loaders}
 
         for slug in steps:
             description, loader_func = by_slug[slug]
-            logger.info(f"\n{'─' * 60}")
             logger.info(f"▶ Ejecutando: {slug} — {description}")
-            logger.info(f"{'─' * 60}")
 
             try:
                 loader_func()
@@ -83,9 +79,7 @@ class DataLoaderOrchestrator:
                 logger.error(f"  Error: {e}")
                 break
 
-        logger.info(f"\n{'=' * 60}")
         logger.info("RESUMEN FINAL")
-        logger.info(f"{'=' * 60}")
         logger.info(f"✓ Completados: {len(self.completed)}")
         for slug in self.completed:
             logger.info(f"  • {slug}")
