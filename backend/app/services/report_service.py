@@ -7,12 +7,12 @@ from app.repositories.factory import RepositoryFactory
 from app.models.incident_report import IncidentReport
 from app.models.report_document import ReportDocument
 from app.models.user import User
-from app.interfaces.incident_report_interface import IIncidentReportRepository
-from app.interfaces.report_document_interface import IReportDocumentRepository
+from app.repositories.incident_report_repository import IncidentReportRepository
+from app.repositories.report_document_repository import ReportDocumentRepository
 from app.services.file_storage_service import FileStorageService
 from app.core.validators import CoordinateValidator
 from app.core.exceptions import ReportNotFoundError, DuplicateFileError
-from app.db.transactions import transaction_no_close
+from app.db.transactions import transactional, transaction_no_close
 
 
 class ReportService:
@@ -30,12 +30,14 @@ class ReportService:
     def __init__(
         self,
         db: Session,
-        incident_repo: IIncidentReportRepository = None,
-        document_repo: IReportDocumentRepository = None,
+        incident_repo: IncidentReportRepository = None,
+        document_repo: ReportDocumentRepository = None,
+        storage_service: FileStorageService = None,
     ):
         self.db = db
         self.incident_repo = incident_repo or RepositoryFactory.create_incident_repository(db)
         self.document_repo = document_repo or RepositoryFactory.create_report_document_repository(db)
+        self.storage = storage_service or FileStorageService()
 
     async def create_report(
         self,
@@ -84,7 +86,7 @@ class ReportService:
                 )
 
                 if file:
-                    storage_result = await FileStorageService.save_file(
+                    storage_result = await self.storage.save_file(
                         file=file,
                         report_id=report.id,
                         current_report_size=0,
@@ -96,7 +98,7 @@ class ReportService:
 
         except Exception:
             if saved_file_path:
-                FileStorageService.delete_file(saved_file_path)
+                self.storage.delete_file(saved_file_path)
             raise
 
     async def add_document(self, report_id: str, file: UploadFile, user: User) -> ReportDocument:
@@ -112,7 +114,7 @@ class ReportService:
             raise PermissionError("Solo el autor del reporte puede adjuntar documentos")
 
         current_size = self.document_repo.get_total_size_by_report(report.id)
-        storage_result = await FileStorageService.save_file(
+        storage_result = await self.storage.save_file(
             file=file,
             report_id=report.id,
             current_report_size=current_size,
@@ -123,7 +125,7 @@ class ReportService:
                 document = self._attach_document(report.id, storage_result)
             return document
         except Exception:
-            FileStorageService.delete_file(storage_result.file_path)
+            self.storage.delete_file(storage_result.file_path)
             raise
 
     def get_documents(self, report_id: str, user: User) -> Tuple[List[ReportDocument], int]:
@@ -135,6 +137,7 @@ class ReportService:
         total_size = self.document_repo.get_total_size_by_report(report.id)
         return documents, total_size
 
+    @transactional
     def remove_document(self, report_id: str, document_id: str, user: User) -> None:
         """Elimina un documento (autor o moderador). Si era el último, el reporte vuelve a modo 2."""
         report = self._get_report_or_raise(report_id)
@@ -147,10 +150,9 @@ class ReportService:
         if document.report_id != report_id:
             raise PermissionError("El documento no pertenece a este reporte")
 
-        with transaction_no_close(self.db):
-            FileStorageService.delete_file(document.file_path)
-            self.document_repo.delete(document_id)
-            self._refresh_documents_metadata(report_id)
+        self.storage.delete_file(document.file_path)
+        self.document_repo.delete(document_id)
+        self._refresh_documents_metadata(report_id)
 
     def get_public_reports(
         self,
@@ -187,7 +189,7 @@ class ReportService:
             storage_result.file_hash_sha256,
             exclude_report_id=report_id,
         ):
-            FileStorageService.delete_file(storage_result.file_path)
+            self.storage.delete_file(storage_result.file_path)
             raise DuplicateFileError(
                 f"Archivo duplicado (hash: {storage_result.file_hash_sha256})"
             )

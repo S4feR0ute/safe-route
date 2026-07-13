@@ -1,25 +1,40 @@
 import os
+import logging
+import requests
 import pandas as pd
 from datetime import datetime
 from sqlalchemy.orm import Session
 from app.core.config import SIDPOL_SOURCE_URL
-from app.interfaces.crime_interface import ICrimeRepository
 from app.models.crime_raw import CrimeRawData
 
+logger = logging.getLogger(__name__)
 
-class SIDPOLCrimeRepository(ICrimeRepository):
+
+class SIDPOLCrimeDAO:
     def __init__(self, db: Session):
         self.db = db
         self.source_url = SIDPOL_SOURCE_URL
 
     def download_source(self) -> str:
+        """Descarga el archivo de SIDPOL y lo guarda localmente, retornando la ruta del archivo."""
         base_download_path = os.getenv("DOWNLOAD_PATH", "data/downloads")
         download_dir = os.path.join(os.getcwd(), base_download_path)
-        
         os.makedirs(download_dir, exist_ok=True)
-        
+
         timestamp = datetime.now().strftime("%Y%m%d_%H%M")
         file_path = os.path.join(download_dir, f"sidpol_sync_{timestamp}.xlsx")
+
+        if os.path.exists(file_path):
+            logger.info(f"Usando cache: {file_path}")
+            return file_path
+
+        logger.info(f"Descargando desde: {self.source_url}")
+        response = requests.get(self.source_url, timeout=60, verify=False)
+        response.raise_for_status()
+
+        with open(file_path, "wb") as f:
+            f.write(response.content)
+        logger.info(f"Archivo guardado: {file_path}")
         return file_path
 
     def parse_source(self, file_path: str):

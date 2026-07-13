@@ -1,14 +1,12 @@
 from typing import Optional, List, Tuple
 from datetime import datetime
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, func
-from geoalchemy2.functions import ST_DWithin, ST_GeomFromText
+from sqlalchemy import func
 from geoalchemy2.elements import WKTElement
 from app.models.incident_report import IncidentReport
-from app.interfaces.incident_report_interface import IIncidentReportRepository
 
 
-class IncidentReportRepository(IIncidentReportRepository):
+class IncidentReportRepository:
     def __init__(self, db: Session):
         self.db = db
 
@@ -41,19 +39,6 @@ class IncidentReportRepository(IIncidentReportRepository):
     def get_by_id(self, report_id: str) -> Optional[IncidentReport]:
         """Obtiene reporte por ID."""
         return self.db.query(IncidentReport).filter(IncidentReport.id == report_id).first()
-
-    def get_by_user(self, user_id: int) -> List[IncidentReport]:
-        """Obtiene todos los reportes de un usuario."""
-        return self.db.query(IncidentReport).filter(
-            IncidentReport.user_id == user_id
-        ).order_by(IncidentReport.created_at.desc()).all()
-
-    def get_pending_reports(self, limit: int = 100) -> List[IncidentReport]:
-        """Obtiene reportes pendientes de validación (modo 3)."""
-        return self.db.query(IncidentReport).filter(
-            IncidentReport.status == "pending",
-            IncidentReport.mode == 3,
-        ).order_by(IncidentReport.created_at.asc()).limit(limit).all()
 
     def get_pending_paginated(
         self,
@@ -114,50 +99,12 @@ class IncidentReportRepository(IIncidentReportRepository):
         ).offset(offset).limit(limit).all()
         return reports, total
 
-    def get_validated_reports(self, limit: int = 100) -> List[IncidentReport]:
-        """Obtiene reportes validados (para integrar al score)."""
-        return self.db.query(IncidentReport).filter(
-            IncidentReport.status == "validated"
-        ).order_by(IncidentReport.validated_at.desc()).limit(limit).all()
-
-    def get_near_location(self, longitude: float, latitude: float, radius_m: int = 500, status: Optional[str] = "validated") -> List[IncidentReport]:
-        """Obtiene reportes validados cerca de una ubicación"""
-        query = self.db.query(IncidentReport)
-
-        if status:
-            query = query.filter(IncidentReport.status == status)
-
-        # ST_DWithin: distancia en metros usando geografía
-        point_wkt = f"SRID=4326;POINT({longitude} {latitude})"
-        query = query.filter(
-            ST_DWithin(
-                IncidentReport.location.cast(ST_GeomFromText),
-                ST_GeomFromText(point_wkt, 4326),
-                radius_m
-            )
-        )
-        return query.all()
-
-    def update_report_status(self, report_id: str, status: str, validated_by_user_id: Optional[int] = None) -> Optional[IncidentReport]:
-        """Actualiza estado de reporte (pending -> validated/rejected)"""
-        report = self.get_by_id(report_id)
-        if report:
-            report.status = status
-            report.validated_by_user_id = validated_by_user_id
-            if status == "validated":
-                report.validated_at = datetime.utcnow()
-        return report
-
-    def count_reports_by_type_and_status(self, incident_type: str, status: str = "validated") -> int:
-        """Cuenta reportes por tipo e estado (para análisis)."""
-        return self.db.query(IncidentReport).filter(
-            and_(
-                IncidentReport.incident_type == incident_type,
-                IncidentReport.status == status
-            )
-        ).count()
-
-    def update_documents_metadata(self, report_id: str, document_count: int, evidence_quality_score: float = 0.0) -> Optional[IncidentReport]:
+    def update_documents_metadata(
+            self,
+            report_id: str,
+            document_count: int,
+            evidence_quality_score: float = 0.0
+        ) -> Optional[IncidentReport]:
         """Actualiza metadatos de documentos después de cargar/eliminar archivos."""
         report = self.get_by_id(report_id)
         if report:

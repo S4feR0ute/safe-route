@@ -4,10 +4,10 @@ from sqlalchemy.orm import Session
 
 from app.models.incident_report import IncidentReport
 from app.models.user import User
-from app.interfaces.incident_report_interface import IIncidentReportRepository
+from app.repositories.incident_report_repository import IncidentReportRepository
 from app.repositories.factory import RepositoryFactory
 from app.core.exceptions import ReportNotFoundError, InvalidReportStateError
-from app.db.transactions import transaction_no_close
+from app.db.transactions import transactional
 
 
 class ModerationService:
@@ -16,7 +16,7 @@ class ModerationService:
     Cada método público es la frontera transaccional: commit al salir sin error, rollback en excepción.
     """
 
-    def __init__(self, db: Session, incident_repo: IIncidentReportRepository = None):
+    def __init__(self, db: Session, incident_repo: IncidentReportRepository = None):
         self.db = db
         self.incident_repo = incident_repo or RepositoryFactory.create_incident_repository(db)
 
@@ -33,6 +33,7 @@ class ModerationService:
             limit=limit, offset=offset, incident_type=incident_type
         )
 
+    @transactional
     def approve_report(
         self,
         report_id: str,
@@ -42,14 +43,14 @@ class ModerationService:
         """Aprueba un reporte (status: pending -> validated)."""
         report = self._get_pending_report(report_id)
 
-        with transaction_no_close(self.db):
-            report.status = "validated"
-            report.validated_at = datetime.utcnow()
-            report.validated_by_user_id = moderator.id
-            report.validation_notes = validation_notes
+        report.status = "validated"
+        report.validated_at = datetime.utcnow()
+        report.validated_by_user_id = moderator.id
+        report.validation_notes = validation_notes
 
         return report
 
+    @transactional
     def reject_report(
         self,
         report_id: str,
@@ -62,11 +63,10 @@ class ModerationService:
         if not validation_notes or validation_notes.strip() == "":
             raise ValueError("Debe proporcionar un motivo para rechazar el reporte")
 
-        with transaction_no_close(self.db):
-            report.status = "rejected"
-            report.validated_at = datetime.utcnow()
-            report.validated_by_user_id = moderator.id
-            report.validation_notes = validation_notes
+        report.status = "rejected"
+        report.validated_at = datetime.utcnow()
+        report.validated_by_user_id = moderator.id
+        report.validation_notes = validation_notes
 
         return report
 

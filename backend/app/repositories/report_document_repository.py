@@ -3,10 +3,9 @@ from datetime import datetime
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.models.report_document import ReportDocument
-from app.interfaces.report_document_interface import IReportDocumentRepository
 
 
-class ReportDocumentRepository(IReportDocumentRepository):
+class ReportDocumentRepository:
     def __init__(self, db: Session):
         self.db = db
 
@@ -36,11 +35,12 @@ class ReportDocumentRepository(IReportDocumentRepository):
         self.db.flush()
         return document
 
-    def hash_already_exists(self, file_hash_sha256: str, exclude_report_id: Optional[str] = None) -> bool:
-        """
-        Verifica si un archivo con este hash ya existe en el sistema.
-        exclude_report_id: Si se proporciona, ignora documentos de ese reporte (para updates)
-        """
+    def hash_already_exists(
+            self,
+            file_hash_sha256: str,
+            exclude_report_id: Optional[str] = None
+        ) -> bool:
+        """Verifica si un archivo con este hash ya existe en el sistema."""
         query = self.db.query(ReportDocument).filter(
             ReportDocument.file_hash_sha256 == file_hash_sha256
         )

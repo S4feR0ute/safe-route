@@ -1,13 +1,12 @@
 import logging
-from fastapi import FastAPI, Request, Depends
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from fastapi.exceptions import RequestValidationError
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.config import API_TITLE, API_DESCRIPTION, API_VERSION
-from app.core.error_handler import ErrorHandler
+from app.core.exception_handlers import register_exception_handlers
+from app.core.exceptions import ServiceUnavailableError
 from app.db.session import get_db
 from app.api.route_endpoint import router as route_router
 from app.api.geocode_endpoint import router as geocode_router
@@ -40,22 +39,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    errors = []
-    for error in exc.errors():
-        errors.append({
-            "field": str(error.get("loc", [])),
-            "message": str(error.get("msg", ""))
-        })
-    return JSONResponse(
-        status_code=422,
-        content={"error": {
-            "code": "VALIDATION_ERROR",
-            "message": "Los datos enviados no tienen el formato correcto.",
-            "details": {"errors": errors},
-        }},
-    )
+# --- Manejo centralizado de errores ---
+register_exception_handlers(app)
 
 # --- Registrar routers ---
 app.include_router(route_router)
@@ -71,9 +56,7 @@ async def health_check(db: Session = Depends(get_db)):
     """Endpoint de salud: verifica el servicio y la conexión a la BD."""
     try:
         db.execute(text("SELECT 1"))
-        return {"status": "ok", "database": "ok", "version": API_VERSION}
     except Exception as e:
         logger.error(f"Health check failed: {e}")
-        return ErrorHandler.service_unavailable(
-            message="La base de datos no está disponible"
-        )
+        raise ServiceUnavailableError(message="La base de datos no está disponible")
+    return {"status": "ok", "database": "ok", "version": API_VERSION}

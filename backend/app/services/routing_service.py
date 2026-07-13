@@ -4,7 +4,7 @@ import networkx as nx
 from sqlalchemy.orm import Session
 
 from app.interfaces.street_graph_interface import IStreetGraphDAO
-from app.interfaces.risk_score_interface import IRiskScoreRepository
+from app.repositories.risk_score_repository import RiskScoreRepository
 from app.core.constants import (
     ALPHA_RISK,
     NEUTRAL_SCORE,
@@ -25,7 +25,7 @@ class RoutingService:
     """
     Servicio de ruteo usando algoritmo de Dijkstra ponderado.
     """
-    def __init__(self, db: Session, graph_dao: IStreetGraphDAO, score_repo: IRiskScoreRepository):
+    def __init__(self, db: Session, graph_dao: IStreetGraphDAO, score_repo: RiskScoreRepository):
         self.db = db
         self.graph_dao = graph_dao
         self.score_repo = score_repo

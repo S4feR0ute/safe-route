@@ -5,18 +5,16 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.repositories.factory import RepositoryFactory
-from app.interfaces.user_interface import IUserRepository
-from app.interfaces.incident_report_interface import IIncidentReportRepository
-from app.interfaces.report_document_interface import IReportDocumentRepository
-from app.interfaces.risk_score_interface import IRiskScoreRepository
+from app.repositories.user_repository import UserRepository
+from app.repositories.incident_report_repository import IncidentReportRepository
+from app.repositories.report_document_repository import ReportDocumentRepository
+from app.repositories.risk_score_repository import RiskScoreRepository
 from app.services.auth_service import AuthService
 from app.services.routing_service import RoutingService
 from app.services.nominatim_service import NominatimService
 from app.services.report_service import ReportService
 from app.services.moderation_service import ModerationService
 from app.services.file_storage_service import FileStorageService
-from app.services.crime_analytics_service import CrimeAnalyticsService
-from app.services.score_calculator_service import ScoreCalculatorService
 
 
 class ServiceContainer:
@@ -35,30 +33,29 @@ class ServiceContainer:
         return self._cache[key]
 
     def clear(self) -> None:
-        """Limpia el caché (útil para tests)."""
         self._cache.clear()
 
     # Repositorios
 
-    def get_user_repository(self) -> IUserRepository:
+    def get_user_repository(self) -> UserRepository:
         return self._get_or_create(
             "user_repo",
             lambda: RepositoryFactory.create_user_repository(self.db),
         )
 
-    def get_incident_repository(self) -> IIncidentReportRepository:
+    def get_incident_repository(self) -> IncidentReportRepository:
         return self._get_or_create(
             "incident_repo",
             lambda: RepositoryFactory.create_incident_repository(self.db),
         )
 
-    def get_report_document_repository(self) -> IReportDocumentRepository:
+    def get_report_document_repository(self) -> ReportDocumentRepository:
         return self._get_or_create(
             "document_repo",
             lambda: RepositoryFactory.create_report_document_repository(self.db),
         )
 
-    def get_risk_score_repository(self) -> IRiskScoreRepository:
+    def get_risk_score_repository(self) -> RiskScoreRepository:
         return self._get_or_create(
             "risk_score_repo",
             lambda: RepositoryFactory.create_risk_score_repository(self.db),
@@ -98,6 +95,7 @@ class ServiceContainer:
                 db=self.db,
                 incident_repo=self.get_incident_repository(),
                 document_repo=self.get_report_document_repository(),
+                storage_service=self.get_file_storage_service(),
             ),
         )
 
@@ -110,21 +108,11 @@ class ServiceContainer:
             ),
         )
 
-    def get_crime_analytics_service(self) -> CrimeAnalyticsService:
+    def get_file_storage_service(self) -> FileStorageService:
         return self._get_or_create(
-            "crime_analytics_service",
-            lambda: CrimeAnalyticsService(db=self.db),
+            "file_storage_service",
+            lambda: FileStorageService(),
         )
-
-    def get_score_calculator_service(self) -> ScoreCalculatorService:
-        return self._get_or_create(
-            "score_calculator_service",
-            lambda: ScoreCalculatorService(db=self.db),
-        )
-    
-    @staticmethod
-    def get_file_storage_service() -> type:
-        return FileStorageService
 
 
 def get_service_container(db: Session = Depends(get_db)) -> ServiceContainer:

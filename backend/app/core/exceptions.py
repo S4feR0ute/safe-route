@@ -1,69 +1,104 @@
-from fastapi.responses import JSONResponse
 from typing import Optional
+from fastapi.responses import JSONResponse
 
 
-class ApiException(Exception):
-    """Excepción base para errores en la API."""
-    def __init__(self, code: str, message: str, status_code: int, details: Optional[dict] = None):
-        self.code = code
-        self.message = message
-        self.status_code = status_code
+class AppException(Exception):
+    code: str = "INTERNAL_ERROR"
+    status_code: int = 500
+    message: str = "Ocurrió un error interno"
+
+    def __init__(self, message: Optional[str] = None, details: Optional[dict] = None):
+        self.message = message or type(self).message
         self.details = details or {}
-        super().__init__(message)
+        super().__init__(self.message)
 
 
-class ServiceError(Exception):
-    """Excepción base para errores de servicios."""
-    pass
+# --- Validación genérica ---
+class ValidationError(AppException):
+    code = "VALIDATION_ERROR"
+    status_code = 400
+    message = "Los datos enviados no son válidos"
 
 
-class EmptyGraphError(ServiceError):
-    """El grafo de calles está vacío."""
-    pass
+# --- Autenticación / Autorización ---
+class AuthenticationRequired(AppException):
+    code = "AUTHENTICATION_REQUIRED"
+    status_code = 401
+    message = "Autenticación requerida"
 
 
-class NoRouteError(ServiceError):
-    """No existe ruta entre los puntos especificados."""
-    pass
+class AuthorizationDenied(AppException):
+    code = "AUTHORIZATION_DENIED"
+    status_code = 403
+    message = "No tienes permisos para acceder a este recurso"
 
 
-class NodeNotFoundError(ServiceError):
-    """Nodo no encontrado en el grafo."""
-    pass
+# --- Servicio no disponible ---
+class ServiceUnavailableError(AppException):
+    code = "SERVICE_UNAVAILABLE"
+    status_code = 503
+    message = "Servicio no disponible"
 
 
-class DuplicateEmailError(ServiceError):
-    """El email ya está registrado."""
-    pass
+# --- Routing ---
+class EmptyGraphError(AppException):
+    code = "SERVICE_UNAVAILABLE"
+    status_code = 503
+    message = "Los datos de rutas no han sido inicializados"
 
 
-class AccountLockedError(ServiceError):
-    """Cuenta bloqueada por demasiados intentos fallidos."""
-    pass
+class NoRouteError(AppException):
+    code = "NOT_FOUND"
+    status_code = 404
+    message = "No existe una ruta peatonal disponible"
 
 
-class InvalidCredentialsError(ServiceError):
-    """Credenciales inválidas."""
-    pass
+class NodeNotFoundError(AppException):
+    code = "NOT_FOUND"
+    status_code = 404
+    message = "No existe una ruta peatonal disponible"
 
 
-class ReportNotFoundError(ServiceError, ValueError):
-    """El reporte no existe."""
-    pass
+# --- Autenticación (dominio de usuarios) ---
+class DuplicateEmailError(AppException):
+    code = "CONFLICT"
+    status_code = 409
+    message = "El email ya está registrado"
 
 
-class InvalidReportStateError(ServiceError, ValueError):
-    """El reporte no está en el estado requerido para la operación."""
-    pass
+class AccountLockedError(AppException):
+    code = "ACCOUNT_LOCKED"
+    status_code = 423
+    message = "Cuenta bloqueada por demasiados intentos fallidos"
 
 
-class DuplicateFileError(ServiceError):
-    """Ya existe un documento con el mismo contenido (hash SHA-256)."""
-    pass
+class InvalidCredentialsError(AppException):
+    code = "AUTHENTICATION_REQUIRED"
+    status_code = 401
+    message = "Email o contraseña incorrectos"
+
+
+# --- Reportes ---
+class ReportNotFoundError(AppException):
+    code = "NOT_FOUND"
+    status_code = 404
+    message = "Reporte no encontrado"
+
+
+class InvalidReportStateError(AppException):
+    code = "VALIDATION_ERROR"
+    status_code = 400
+    message = "El reporte no está en el estado requerido para la operación"
+
+
+class DuplicateFileError(AppException):
+    code = "CONFLICT"
+    status_code = 409
+    message = "Ya existe un documento con el mismo contenido (hash SHA-256)"
 
 
 def error_response(code: str, message: str, status_code: int, details: Optional[dict] = None) -> JSONResponse:
-    """Factory para crear respuestas de error consistentes."""
+    """Factory para crear respuestas de error consistentes (sobre {"error": {...}})."""
     return JSONResponse(
         status_code=status_code,
         content={"error": {

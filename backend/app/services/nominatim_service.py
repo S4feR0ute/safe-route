@@ -49,12 +49,3 @@ class NominatimService:
             raise TimeoutError("Nominatim no respondió a tiempo. Intenta de nuevo.")
         except requests.exceptions.RequestException as e:
             raise ConnectionError(f"Error al conectarse con Nominatim: {e}")
-
-    def geocode_address(self, address: str) -> dict | None:
-        """
-        Versión simplificada: devuelve solo el primer resultado o None.
-        """
-        results = self.search(address)
-        if not results:
-            return None
-        return results[0]

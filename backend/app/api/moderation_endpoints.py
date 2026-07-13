@@ -3,8 +3,7 @@ from fastapi import APIRouter, Depends, Query
 from typing import Optional
 
 from app.core.auth_helper import get_moderator
-from app.core.error_handler import ErrorHandler
-from app.core.exceptions import ReportNotFoundError, InvalidReportStateError
+from app.core.exceptions import ValidationError
 from app.core.service_container import ServiceContainer, get_service_container
 from app.schemas.report_schemas import (
     ReportResponse,
@@ -25,20 +24,15 @@ async def get_moderation_queue(
     container: ServiceContainer = Depends(get_service_container),
 ):
     """Obtiene cola de reportes pendientes de moderación."""
-    try:
-        reports, total = container.get_moderation_service().get_pending_reports(
-            limit=limit,
-            offset=offset,
-            incident_type=incident_type
-        )
-        return ReportListResponse(
-            total=total,
-            reports=[ReportResponse.model_validate(r) for r in reports]
-        )
-
-    except Exception as e:
-        logger.exception(f"Moderation queue error: {type(e).__name__}")
-        return ErrorHandler.internal_error(message="Error al obtener cola de moderación")
+    reports, total = container.get_moderation_service().get_pending_reports(
+        limit=limit,
+        offset=offset,
+        incident_type=incident_type,
+    )
+    return ReportListResponse(
+        total=total,
+        reports=[ReportResponse.model_validate(r) for r in reports],
+    )
 
 
 @router.get("/{report_id}", response_model=ReportResponse)
@@ -48,15 +42,8 @@ async def get_report_detail(
     container: ServiceContainer = Depends(get_service_container),
 ):
     """Obtiene detalles de un reporte específico para moderación."""
-    try:
-        report = container.get_moderation_service().get_report_detail(report_id)
-        return ReportResponse.model_validate(report)
-
-    except ReportNotFoundError as e:
-        return ErrorHandler.not_found(str(e).replace(" no encontrado", ""))
-    except Exception as e:
-        logger.exception(f"Get report detail error: {type(e).__name__}")
-        return ErrorHandler.internal_error(message="Error al obtener detalles del reporte")
+    report = container.get_moderation_service().get_report_detail(report_id)
+    return ReportResponse.model_validate(report)
 
 
 @router.patch("/{report_id}/approve", response_model=ReportResponse)
@@ -68,29 +55,18 @@ async def approve_report(
 ):
     """Aprueba un reporte (status: pending -> validated)."""
     if request.status != "validated":
-        return ErrorHandler.validation_error(
-            message="Status debe ser 'validated' para aprobar un reporte",
-            field="status"
+        raise ValidationError(
+            "Status debe ser 'validated' para aprobar un reporte",
+            details={"field": "status"},
         )
 
-    try:
-        report = container.get_moderation_service().approve_report(
-            report_id=report_id,
-            moderator=moderator,
-            validation_notes=request.reason
-        )
-        logger.info(
-            f"Reporte {report_id} aprobado por moderador {moderator.id} ({moderator.email})"
-        )
-        return ReportResponse.model_validate(report)
-
-    except ReportNotFoundError as e:
-        return ErrorHandler.not_found(str(e).replace(" no encontrado", ""))
-    except InvalidReportStateError as e:
-        return ErrorHandler.validation_error(message=str(e), field="report_id")
-    except Exception as e:
-        logger.exception(f"Approve report error: {type(e).__name__}")
-        return ErrorHandler.internal_error(message="Error al aprobar reporte")
+    report = container.get_moderation_service().approve_report(
+        report_id=report_id,
+        moderator=moderator,
+        validation_notes=request.reason,
+    )
+    logger.info(f"Reporte {report_id} aprobado por moderador {moderator.id} ({moderator.email})")
+    return ReportResponse.model_validate(report)
 
 
 @router.patch("/{report_id}/reject", response_model=ReportResponse)
@@ -105,32 +81,21 @@ async def reject_report(
     Requiere reason (motivo del rechazo).
     """
     if request.status != "rejected":
-        return ErrorHandler.validation_error(
-            message="Status debe ser 'rejected' para rechazar un reporte",
-            field="status"
+        raise ValidationError(
+            "Status debe ser 'rejected' para rechazar un reporte",
+            details={"field": "status"},
         )
 
-    try:
-        report = container.get_moderation_service().reject_report(
-            report_id=report_id,
-            moderator=moderator,
-            validation_notes=request.reason
-        )
-        logger.info(
-            f"Reporte {report_id} rechazado por moderador {moderator.id} ({moderator.email}). "
-            f"Motivo: {request.reason}"
-        )
-        return ReportResponse.model_validate(report)
-
-    except ReportNotFoundError as e:
-        return ErrorHandler.not_found(str(e).replace(" no encontrado", ""))
-    except InvalidReportStateError as e:
-        return ErrorHandler.validation_error(message=str(e), field="report_id")
-    except ValueError as e:
-        return ErrorHandler.validation_error(message=str(e), field="reason")
-    except Exception as e:
-        logger.exception(f"Reject report error: {type(e).__name__}")
-        return ErrorHandler.internal_error(message="Error al rechazar reporte")
+    report = container.get_moderation_service().reject_report(
+        report_id=report_id,
+        moderator=moderator,
+        validation_notes=request.reason,
+    )
+    logger.info(
+        f"Reporte {report_id} rechazado por moderador {moderator.id} ({moderator.email}). "
+        f"Motivo: {request.reason}"
+    )
+    return ReportResponse.model_validate(report)
 
 
 @router.get("/stats/dashboard")
@@ -139,10 +104,5 @@ async def get_moderation_stats(
     container: ServiceContainer = Depends(get_service_container),
 ):
     """Obtiene estadísticas de moderación para el dashboard."""
-    try:
-        stats = container.get_moderation_service().get_moderation_stats()
-        return {"status": "ok", "data": stats}
-
-    except Exception as e:
-        logger.exception(f"Moderation stats error: {type(e).__name__}")
-        return ErrorHandler.internal_error(message="Error al obtener estadísticas de moderación")
+    stats = container.get_moderation_service().get_moderation_stats()
+    return {"status": "ok", "data": stats}

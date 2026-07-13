@@ -1,0 +1,35 @@
+"""Pesos y clasificación por tipo de delito (fuente SIDPOL)."""
+
+# Mapeo de tipos relevantes para seguridad peatonal y sus pesos
+CRIME_WEIGHTS_MAP = {
+    "ROBO": 1.0,
+    "HOMICIDIO": 1.0,
+    "VIOLACION DE LA LIBERTAD SEXUAL": 1.0,
+    "VIOLACION DE LA LIBERTAD PERSONAL": 0.9,
+    "EXTORSION": 0.9,
+    "TRATA DE PERSONAS": 0.9,
+    "LESIONES": 0.8,
+    "HURTO": 0.7,
+    "PAZ PUBLICA": 0.6,
+    "PELIGRO COMUN": 0.6,
+    "DAÑOS": 0.5,
+    "RECEPTACION": 0.4,
+    "VIOLACION DE DOMICILIO": 0.4,
+    "EXPOSICION A PELIGRO O ABANDONO DE PERSONAS EN PELIGRO": 0.8
+}
+
+# Delitos que ocurren en la vía pública (relevantes para el peatón)
+STREET_CRIMES = {
+    "ROBO",
+    "HOMICIDIO",
+    "VIOLACION DE LA LIBERTAD SEXUAL",
+    "VIOLACION DE LA LIBERTAD PERSONAL",
+    "EXTORSION",
+    "TRATA DE PERSONAS",
+    "LESIONES",
+    "HURTO",
+    "PAZ PUBLICA",
+    "PELIGRO COMUN",
+    "DAÑOS",
+    "EXPOSICION A PELIGRO O ABANDONO DE PERSONAS EN PELIGRO",
+}
